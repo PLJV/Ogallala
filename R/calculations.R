@@ -9,20 +9,22 @@ generateTargetRasterGrid <- function(s=NULL) {
                          crs=sp::CRS("+init=epsg:2163"))
   return(grid)
 }
-#' using ofr98-393, make a contour line to raster product. The units on elevation are US feet.
+#' using ofr98-393, make a contour line to raster product. The units on elevation are feet (imperial).
 #' @export
 generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL){
   # sanity-check
-  if(sum(grepl(tolower(names(s)),pattern="elev"))==0) stop("no ELEV field found in the s= base countour shapefile provided.")
+  names(s) <- toupper(names(s))
+  if(sum(grepl(names(s),pattern="ELEV"))==0) stop("no ELEV field found in the s= base countour shapefile provided.")
   if(is.null(targetRasterGrid)){
     cat(" -- no target raster grid specified. Will generate one from s= elevation data.\n")
     targetRasterGrid <- generateTargetRasterGrid(s=s)
   }
 
   grid_pts <- as(s, 'SpatialPointsDataFrame')
-         g <- gstat::gstat(id="ELEV", formula = ELEV~1, data=grid_pts, nmax=7, set=list(idp = .5))
+         g <- gstat::gstat(id="ELEV", formula = ELEV~1, data=grid_pts)
 
   bedrock <- interpolate(targetRasterGrid, g)
+
   return(bedrock)
 }
 #' calculate saturated thickness for a series of well points and the base elevation of
