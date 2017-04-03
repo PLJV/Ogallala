@@ -13,7 +13,7 @@ generateTargetRasterGrid <- function(s=NULL) {
 }
 #' using ofr98-393, make a contour line to raster product. The units on elevation are feet (imperial).
 #' @export
-generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL){
+generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL, mask=F){
   # sanity-check
   names(s) <- toupper(names(s))
   if(sum(grepl(names(s),pattern="ELEV"))==0) stop("no ELEV field found in the s= base countour shapefile provided.")
@@ -21,12 +21,20 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL){
     cat(" -- no target raster grid specified. Will generate one from s= elevation data.\n")
     targetRasterGrid <- generateTargetRasterGrid(s=s)
   }
-
+  cat(" -- interpolating: ")
   grid_pts <- as(s, 'SpatialPointsDataFrame')
          g <- gstat::gstat(id="ELEV", formula = ELEV~1, data=grid_pts)
+   bedrock <- raster::interpolate(targetRasterGrid, g)
 
-  bedrock <- interpolate(targetRasterGrid, g)
-
+  if(mask){
+    cat(" -- masking\n")
+    if(!file.exists(file.path("boundaries/ds543.zip"))){
+      scrapeHighPlainsAquiferBoundary()
+    }
+    boundary <- sp::spTransform(unpackHighPlainsAquiferBoundary(),
+                                sp::CRS(raster::projection(bedrock))
+    bedrock <- raster::mask(bedrock, boundary)
+  }
   return(bedrock)
 }
 #' calculate saturated thickness for a series of well points and the base elevation of
@@ -35,7 +43,7 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL){
 calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL){
   # sanity-check our input
   if(is.null(wellPts)) stop("wellPts= needs to be a SpatialPointsDataFrame specifying
-                             well point data, as returned by unpack_wl_zip()")
+                             well point data, as returned by unpackWellPointData()")
   if(is.null(baseRaster)){
     baseRaster = ogallala::generateBaseElevationRaster(s=wellPts)
   } else if(!inherits(baseRaster,'raster')){
