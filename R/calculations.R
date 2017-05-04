@@ -11,28 +11,54 @@ generateTargetRasterGrid <- function(s=NULL) {
                          crs=sp::CRS("+init=epsg:2163"))
   return(grid)
 }
-#' using ofr98-393, make a contour line to raster product. The units on elevation are feet (imperial).
+#' using ofr98-393, make a contour line to raster product. The units on
+#' bedrock elevation are feet (imperial). We are going to change them to
+#' meters so they are consistent with surface DEMs from NED.
+#' @param two_pass Boolean. Should we do a second pass of IDW interpolation to remove artifacts in
+#' bedrock elevation.
+#' @param feet_to_meters Boolean. Should we convert feet into meters?
 #' @export
-generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL, mask=F){
+generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
+                                        two_pass=T, feet_to_meters=T,
+                                        mask=F){
   # sanity-check
   names(s) <- toupper(names(s))
   if(sum(grepl(names(s),pattern="ELEV"))==0) stop("no ELEV field found in the s= base countour shapefile provided.")
   if(is.null(targetRasterGrid)){
-    cat(" -- no target raster grid specified. Will generate one from s= elevation data.\n")
-    targetRasterGrid <- generateTargetRasterGrid(s=s)
+    cat(" -- using extent data from input Spatial* data to generate a 500m target grid\n")
+    targetRasterGrid <- Ogallala:::generateTargetRasterGrid(s=s)
+  }
+  # local functions
+  idw_interpolator <- function(pts,field="ELEV"){
+    g <- gstat::gstat(id=field,
+                      formula = as.formula(paste(field,"~1",sep="")),
+                      data=pts)
+    return(raster::interpolate(targetRasterGrid, g))
   }
   cat(" -- interpolating: ")
+  cat(" -- pass one:")
   grid_pts <- as(s, 'SpatialPointsDataFrame')
-         g <- gstat::gstat(id="ELEV", formula = ELEV~1, data=grid_pts)
-   bedrock <- raster::interpolate(targetRasterGrid, g)
-
+  if(feet_to_meters){
+    grid_pts$ELEV <- feetToMeters(grid_pts$ELEV)
+  }
+  bedrock <- idw_interpolator(grid_pts)
+  # IDW is meant to be used on scattered data. Our contour lines were definately
+  # not scattered and this results in localized artifacts in our interpolation
+  # we are going to re-sample the raster again and re-do our interpolation
+  # to try and smooth over these artifacts
+  if(two_pass){
+    cat(" -- pass two (resampling to remove artifacts):")
+    resampled <- raster::sampleRandom(bedrock,size=999999,sp=T)
+      names(resampled) <- "ELEV"
+    bedrock <- idw_interpolator(resampled)
+  }
   if(mask){
     cat(" -- masking\n")
     if(!file.exists(file.path("boundaries/ds543.zip"))){
       scrapeHighPlainsAquiferBoundary()
     }
     boundary <- sp::spTransform(unpackHighPlainsAquiferBoundary(),
-                                sp::CRS(raster::projection(bedrock))
+                                sp::CRS(raster::projection(bedrock)))
     bedrock <- raster::mask(bedrock, boundary)
   }
   return(bedrock)
@@ -50,5 +76,5 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL){
     stop("baseRaster= argument must be a raster object, as returned by generateBaseElevationRaster()")
   }
   # calculate saturated thickness
-  wellPts$
+  return(NA)
 }
