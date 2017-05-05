@@ -11,6 +11,14 @@ generateTargetRasterGrid <- function(s=NULL) {
                          crs=sp::CRS("+init=epsg:2163"))
   return(grid)
 }
+#' hidden shortcut for gstat's idw interpolator
+idw_interpolator <- function(pts,targetRasterGrid=NULL,field="ELEV"){
+  pts <- pts[!is.na(pts@data[,field]),] # drop any NA values
+  g <- gstat::gstat(id=field,
+                    formula = as.formula(paste(field,"~1",sep="")),
+                    data=pts)
+  return(raster::interpolate(targetRasterGrid, g))
+}
 #' using ofr98-393, make a contour line to raster product. The units on
 #' bedrock elevation are feet (imperial). We are going to change them to
 #' meters so they are consistent with surface DEMs from NED.
@@ -28,15 +36,8 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
     cat(" -- using extent data from input Spatial* data to generate a 500m target grid\n")
     targetRasterGrid <- Ogallala:::generateTargetRasterGrid(s=s)
   }
-  # local functions
-  idw_interpolator <- function(pts,field="ELEV"){
-    g <- gstat::gstat(id=field,
-                      formula = as.formula(paste(field,"~1",sep="")),
-                      data=pts)
-    return(raster::interpolate(targetRasterGrid, g))
-  }
-  cat(" -- interpolating: ")
-  cat(" -- pass one:")
+  cat(" -- interpolating\n")
+  cat(" -- pass one: ")
   grid_pts <- as(s, 'SpatialPointsDataFrame')
   if(feet_to_meters){
     grid_pts$ELEV <- feetToMeters(grid_pts$ELEV)
@@ -47,8 +48,8 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   # we are going to re-sample the raster again and re-do our interpolation
   # to try and smooth over these artifacts
   if(two_pass){
-    cat(" -- pass two (resampling to remove artifacts):")
-    resampled <- raster::sampleRandom(bedrock,size=999999,sp=T)
+    cat(" -- pass two (resampling to remove artifacts): ")
+    resampled <- raster::sampleRandom(bedrock,size=9999,sp=T)
       names(resampled) <- "ELEV"
     bedrock <- idw_interpolator(resampled)
   }
@@ -66,7 +67,8 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
 #' calculate saturated thickness for a series of well points and the base elevation of
 #' the aquifer (as returned by ogallala::generateBaseElevationRaster())
 #' @export
-calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL){
+calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
+                                        surfaceRaster=NULL, using_metric=T){
   # sanity-check our input
   if(is.null(wellPts)) stop("wellPts= needs to be a SpatialPointsDataFrame specifying
                              well point data, as returned by unpackWellPointData()")
@@ -75,6 +77,42 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL){
   } else if(!inherits(baseRaster,'raster')){
     stop("baseRaster= argument must be a raster object, as returned by generateBaseElevationRaster()")
   }
+  if(is.null(surfaceRaster)){
+    surfaceRaster = ogallala::scrapeNed(s=wellPts)
+  } else if(!inherits(baseRaster,'raster')){
+    stop("surfaceRaster= argument must be a raster object")
+  }
+  if(raster::projection(surfaceRaster) != raster::projection(baseRaster)){
+    cat(" -- re-gridding surface raster to the resolution of our base raster\n")
+    surfaceRaster <- projectRaster(surfaceRaster,
+                                   to=baseRaster)
+  }
+  if(using_metric){
+    wellPts$well_depth_ft <- feetToMeters(wellPts$well_depth_ft)
+    wellPts$lev_va_ft <- feetToMeters(wellPts$lev_va_ft)
+  }
+  # extract surface and aquifer base information for our well points
+  wellPts$surface_elevation <-
+    raster::extract(x=surfaceRaster,
+                    y=sp::spTransform(wellPts,CRS(projection(surfaceRaster))),
+                    method='bilinear'
+                   )
+  wellPts$base_elevation <-
+    raster::extract(x=baseRaster,
+                    y=sp::spTransform(wellPts,CRS(projection(baseRaster))),
+                    method='bilinear'
+                   )
   # calculate saturated thickness
-  return(NA)
+  depth_to_base <-
+         (wellPts$surface_elevation - wellPts$base_elevation)
+  wellPts$saturated_thickness <-
+    depth_to_base - wellPts$lev_va_ft
+  # units are always reported in (imperial) feet of saturated thickness
+  wellPts$saturated_thickness <- if(using_metric) round(metersToFeet(wellPts$saturated_thickness),2) else round(wellPts$saturated_thickness,2)
+
+  # some areas will have a non-sense "less than 0" depth_to_base
+  # value -- assume that saturated thickness is zero in these places
+  wellPts$saturated_thickness[wellPts$saturated_thickness<0] <- 0
+
+  return(wellPts)
 }

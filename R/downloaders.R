@@ -27,6 +27,20 @@ parse_url <- function (x = NULL, pattern = NULL)
       return(split)
     }
 }
+#' scrape the national elevation dataset (using FedData) to fetch and merge
+#' surface elevation DEMs for our region
+#' @export
+scrapeNed <- function(s=NULL){
+  if(dir.exists("RAW")){
+    unlink("RAW",recursive=T, force=T)
+  }
+  if(file.exists("surface_elevation.tif")){
+    return(raster::raster("surface_elevation.tif"))
+  }
+  r <- FedData::get_ned(s, label="regional_elevation_tiles", force.redo=T)
+    raster::writeRaster(r,progress='text')
+  return(r)
+}
 #' webscrape functionality for the hp aquifer boundary contour provided by USGS.
 #' Returns a full pathname to the zipfile containing the boundary (ESRI Shapefile).
 #' @export
@@ -59,6 +73,7 @@ scrapeWellPointData <- function( base_url="https://ne.water.usgs.gov/projects/HP
   zip_names <-  unlist(lapply(strsplit(hrefs,split="/"), FUN=function(x) x[length(x)]))
   toGet <- paste("https://ne.water.usgs.gov/projects/HPA/",hrefs,sep="")
   existingZips <- list.files("well_point_data",pattern="^WL_ALL_.*.zip$")
+    existingZips <- existingZips[grepl(existingZips,pattern=paste(years,collapse="|"))]
   # fetch any well point zips we don't already have
   if(length(existingZips) < length(toGet)){
     if(length(existingZips)>0){
@@ -73,13 +88,15 @@ scrapeWellPointData <- function( base_url="https://ne.water.usgs.gov/projects/HP
       cat('.')
     }
   }
+  ret <- list.files("well_point_data",pattern="^WL_ALL_.*.zip$",full.names=T)
+    ret <- ret[grepl(ret,pattern=paste(years,collapse="|"))]
   cat("\n");
-  return(list.files("well_point_data",pattern="^WL_ALL_.*.zip$",full.names=T))
+  return(ret)
 }
-#' scrape bedrock elevation data
+#' scrape aquifer base elevation data
 #  see: https://water.usgs.gov/GIS/metadata/usgswrd/XML/ofr98-393_aqbase.xml
 #  note: [ELEV] field : base of aquifer elevation is in feet, not meters
-scrapeBedrockElevation <- function(base_url="https://water.usgs.gov/GIS/metadata/usgswrd/XML/ofr98-393_aqbase.xml"){
+scrapeBaseElevation <- function(base_url="https://water.usgs.gov/GIS/metadata/usgswrd/XML/ofr98-393_aqbase.xml"){
   hrefs <- xml2::read_html(base_url)
   hrefs <- rvest::xml_nodes(hrefs,"networkr")
   hrefs <- hrefs[grepl(hrefs,pattern="e00")]
@@ -106,11 +123,11 @@ unpackWellPointData <- function(x=NULL){
     return(unpack_file(x))
   }
 }
-#' unpack bedrock elevation data
+#' unpack base elevation data
 #' @export
-unpackBedrockElevation <- function(x="ofr98-393.e00"){
+unpackBaseElevation <- function(x="ofr98-393.e00"){
   x = list.files(".",pattern=x)[1]
-  if(!file.exists(x)) stop("couldn't find bedrock elevation contour data in cwd. use a better x= argument")
+  if(!file.exists(x)) stop("couldn't find aquifer base elevation contour data in cwd. use a better x= argument")
   if(grepl(x,pattern="gz")) R.utils::gunzip(x,overwrite=T)
   x <- rgdal::readOGR("ofr98-393.e00",verbose=F)
     return(sp::spTransform(x,sp::CRS(raster::projection("+init=epsg:2163"))))
