@@ -15,7 +15,7 @@ wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
 
 # build an aquifer base raster
 base_elevation <- Ogallala::scrapeBaseElevation()
-  base_elevation <- Ogallala::unpackBaseElevation()
+  base_elevation <- Ogallala::unpackBaseElevation(base_elevation)
     base_elevation <- Ogallala::generateBaseElevationRaster(base_elevation)
 writeRaster(base_elevation, "base_elevation.tif")
 

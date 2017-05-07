@@ -27,7 +27,7 @@ idw_interpolator <- function(pts,targetRasterGrid=NULL,field="ELEV"){
 #' @param feet_to_meters Boolean. Should we convert feet into meters?
 #' @export
 generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
-                                        two_pass=F, feet_to_meters=T,
+                                        two_pass=T, feet_to_meters=T,
                                         mask=F){
   # sanity-check
   names(s) <- toupper(names(s))
@@ -35,16 +35,22 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   if(is.null(targetRasterGrid)){
     cat(" -- using extent data from input Spatial* data to generate a 500m target grid\n")
     targetRasterGrid <- Ogallala:::generateTargetRasterGrid(s=s)
-      values(targetRasterGrid) <- 0
+      raster::values(targetRasterGrid) <- 0
   }
   # build a K=5 NN index of random points across our target area
   # and populate with values informed by our base contour delineation
   cat(" -- interpolating\n")
   cat(" -- pass one: ")
-  grid_pts <- as(s, 'SpatialPointsDataFrame')
-    colnames(grid_pts@data) <- "ELEV"
-      grid_pts <- raster::rasterize(grid_pts, targetRasterGrid, field="ELEV")
-  base <- raster::resample(grid_pts,targetRasterGrid,method='bilinear',progress='text')
+    grid_pts <- raster::rasterize(s, targetRasterGrid, field="ELEV")
+      grid_pts <- raster::rasterToPoints(grid_pts, sp=T)
+        colnames(grid_pts@data) <- "ELEV"
+  base <- idw_interpolator(grid_pts, targetRasterGrid)
+  if(two_pass){
+  cat(" -- pass two (resampling to remove artifacts): ")
+    resampled <- raster::sampleRandom(base,size=99999,sp=T)
+      names(resampled) <- "ELEV"
+    base <- idw_interpolator(resampled)
+  }
   if(feet_to_meters){
     base <- round(Ogallala:::feetToMeters(base),2)
   }
