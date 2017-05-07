@@ -1,4 +1,4 @@
-#' hidden function for feet-> meters
+#' hidden function for feet-> meters [https://goo.gl/fguOPH]
 feetToMeters <- function(x) x*0.3048
 #' hidden function for meters -> feet
 metersToFeet <- function(x) x/0.3048
