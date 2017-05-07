@@ -3,6 +3,8 @@
 export(calculateSaturatedThickness)
 export(generateBaseElevationRaster)
 export(scrapeHighPlainsAquiferBoundary)
+export(scrapeNed)
 export(scrapeWellPointData)
+export(unpackBaseElevation)
 export(unpackHighPlainsAquiferBoundary)
 export(unpackWellPointData)

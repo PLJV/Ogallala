@@ -2,10 +2,21 @@
 % Please edit documentation in R/calculations.R
 \name{generateBaseElevationRaster}
 \alias{generateBaseElevationRaster}
-\title{using ofr98-393, make a contour line to raster product. The units on elevation are feet (imperial).}
+\title{using ofr98-393, make a contour line to raster product. The units on
+bedrock elevation are feet (imperial). We are going to change them to
+meters so they are consistent with surface DEMs from NED.}
 \usage{
-generateBaseElevationRaster(s = NULL, targetRasterGrid = NULL, mask = F)
+generateBaseElevationRaster(s = NULL, targetRasterGrid = NULL,
+  two_pass = T, feet_to_meters = T, mask = F)
+}
+\arguments{
+\item{two_pass}{Boolean. Should we do a second pass of IDW interpolation to remove artifacts in
+bedrock elevation.}
+
+\item{feet_to_meters}{Boolean. Should we convert feet into meters?}
 }
 \description{
-using ofr98-393, make a contour line to raster product. The units on elevation are feet (imperial).
+using ofr98-393, make a contour line to raster product. The units on
+bedrock elevation are feet (imperial). We are going to change them to
+meters so they are consistent with surface DEMs from NED.
 }

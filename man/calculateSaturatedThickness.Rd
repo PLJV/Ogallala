@@ -5,7 +5,8 @@
 \title{calculate saturated thickness for a series of well points and the base elevation of
 the aquifer (as returned by ogallala::generateBaseElevationRaster())}
 \usage{
-calculateSaturatedThickness(wellPts = NULL, baseRaster = NULL)
+calculateSaturatedThickness(wellPts = NULL, baseRaster = NULL,
+  surfaceRaster = NULL, using_metric = T)
 }
 \description{
 calculate saturated thickness for a series of well points and the base elevation of

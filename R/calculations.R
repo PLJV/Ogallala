@@ -64,6 +64,50 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   }
   return(bedrock)
 }
+# use a KNN classifier fit to lat/lon to select a neighborhood of points around
+# each well and calculates a summary statistic of your choosing (e.g., mean)
+knnPointSmoother <- function(pts=NULL, field=NULL, k=4,fun=mean){
+  index <- cbind(1:nrow(pts),
+             FNN::get.knn(
+               cbind(pts@data[,'base_elevation'], pts@coords), k=k)$nn.index)
+  pts@data[,paste(field,"_smoothed",sep="")] <-
+    apply(MARGIN=1,matrix(pts@data[as.vector(index),field],ncol=k+1),
+          FUN=mean, na.rm=T)
+  return(pts)
+}
+polynomialTrendSurface <- function(pts, order=4,
+                                   field=NULL, predRaster=NULL){
+  t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
+    colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
+      t <- data.frame(t)
+  cat(" -- building a polynomial trend model\n")
+  covs <- paste("poly(",colnames(t)[2:ncol(t)],",", order, ")",sep="")
+    covs <- paste(covs,collapse="+")
+      formula <- as.formula(paste(field,"~",covs,collapse=""))
+  m <- glm(formula,data=na.omit(t))
+  # if the user provided a rasterStack for making predictions, let's use it.
+  if(!is.null(predRaster)){
+    if(sum(!colnames(t)[2:ncol(t)] %in% names(predRaster)) > 0){
+      # if we are missing predictors, are they latitude and longitude?
+      if(sum(! colnames(t)[2:ncol(t)] %in% c(names(predRaster),"longitude","latitude")) == 2){
+        cat(" -- calculating latitude and longitude")
+        predRaster$latitude  <- init(predRaster,"y")
+        predRaster$longitude <- init(predRaster,"x")
+      }
+    }
+    cat(" -- projecting across regional extent:\n")
+    polynomial_trend <- raster::predict(predRaster,m,progress='text',type="response")
+    return(list(m=m,raster=polynomial_trend_out))
+  }
+  # return the model by default
+  return(m)
+}
+splitToTrainingTestingDatasets <- function(pts=NULL,split=0.2){
+  rows <- 1:nrow(pts)
+  out_sample  <- sample(rows, size=split*nrow(pts))
+  in_sample   <- rows[!rows %in% out_sample]
+  return(list(training=pts[in_sample,],testing=pts[out_sample,]))
+}
 #' calculate saturated thickness for a series of well points and the base elevation of
 #' the aquifer (as returned by ogallala::generateBaseElevationRaster())
 #' @export
@@ -74,12 +118,12 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
                              well point data, as returned by unpackWellPointData()")
   if(is.null(baseRaster)){
     baseRaster = ogallala::generateBaseElevationRaster(s=wellPts)
-  } else if(!inherits(baseRaster,'raster')){
+  } else if(!inherits(baseRaster,'Raster')){
     stop("baseRaster= argument must be a raster object, as returned by generateBaseElevationRaster()")
   }
   if(is.null(surfaceRaster)){
     surfaceRaster = ogallala::scrapeNed(s=wellPts)
-  } else if(!inherits(baseRaster,'raster')){
+  } else if(!inherits(baseRaster,'Raster')){
     stop("surfaceRaster= argument must be a raster object")
   }
   if(raster::projection(surfaceRaster) != raster::projection(baseRaster)){
