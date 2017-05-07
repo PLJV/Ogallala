@@ -2,10 +2,10 @@
 % Please edit documentation in R/calculations.R
 \name{metersToFeet}
 \alias{metersToFeet}
-\title{hidden function for meters -> feet}
+\title{hidden function for meters -> feet [goo.gl/EmwvV1]}
 \usage{
 metersToFeet(x)
 }
 \description{
-hidden function for meters -> feet
+hidden function for meters -> feet [goo.gl/EmwvV1]
 }

@@ -5,6 +5,28 @@
 # Author : kyle.taylor@pljv.org
 #
 
+# define our regional boundary
+boundary <- Ogallala:::scrapeHighPlainsAquiferBoundary()
+  boundary <- Ogallala:::unpackHighPlainsAquiferBoundary(boundary)
+
+# fetch our input well data
+wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
+  wellPoints <- Ogallala:::unpackWellPointData(wellPoints)
+
+# build an aquifer base raster
+base_elevation <- Ogallala::scrapeBaseElevation()
+  base_elevation <- Ogallala::unpackBaseElevation()
+    base_elevation <- Ogallala::generateBaseElevationRaster(base_elevation)
+writeRaster(base_elevation, "base_elevation.tif")
+
+# calculate saturated thickness
+wellPts <- calculateSaturatedThickness(wellPts=wellPts,
+                                       baseRaster=base_elevation,
+                                       convert_to_imperial=T)
+# train our interpolators
+
+# do some cross-validation
+
 inverse_distance       <- raster("saturated_thicknes_09_idw.tif")
 inverse_distance_w_knn <- raster("saturated_thicknes_09_knn_idw.tif")
 polynomial_trend       <- raster("saturated_thicknes_09_polynomial_trend.tif")
@@ -31,7 +53,7 @@ overall <- data.frame(matrix(NA,nrow=k,ncol=6))
   colnames(overall) <- c("topogrid","idw","idw_w_knn",
                            "polynomial","ensemble_pt",
                              "ensemble_tp")
-                             
+
 residuals <- data.frame(matrix(NA,nrow=nrow(pts)*0.2,ncol=4))
 
 topogrid_raw_residual_error         <- vector()

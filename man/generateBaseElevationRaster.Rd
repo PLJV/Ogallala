@@ -7,7 +7,7 @@ bedrock elevation are feet (imperial). We are going to change them to
 meters so they are consistent with surface DEMs from NED.}
 \usage{
 generateBaseElevationRaster(s = NULL, targetRasterGrid = NULL,
-  two_pass = T, feet_to_meters = T, mask = F)
+  two_pass = F, feet_to_meters = T, mask = F)
 }
 \arguments{
 \item{two_pass}{Boolean. Should we do a second pass of IDW interpolation to remove artifacts in

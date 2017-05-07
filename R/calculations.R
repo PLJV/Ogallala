@@ -27,7 +27,7 @@ idw_interpolator <- function(pts,targetRasterGrid=NULL,field="ELEV"){
 #' @param feet_to_meters Boolean. Should we convert feet into meters?
 #' @export
 generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
-                                        two_pass=T, feet_to_meters=T,
+                                        two_pass=F, feet_to_meters=T,
                                         mask=F){
   # sanity-check
   names(s) <- toupper(names(s))
@@ -35,23 +35,18 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   if(is.null(targetRasterGrid)){
     cat(" -- using extent data from input Spatial* data to generate a 500m target grid\n")
     targetRasterGrid <- Ogallala:::generateTargetRasterGrid(s=s)
+      values(targetRasterGrid) <- 0
   }
+  # build a K=5 NN index of random points across our target area
+  # and populate with values informed by our base contour delineation
   cat(" -- interpolating\n")
   cat(" -- pass one: ")
   grid_pts <- as(s, 'SpatialPointsDataFrame')
+    colnames(grid_pts@data) <- "ELEV"
+      grid_pts <- raster::rasterize(grid_pts, targetRasterGrid, field="ELEV")
+  base <- raster::resample(grid_pts,targetRasterGrid,method='bilinear',progress='text')
   if(feet_to_meters){
-    grid_pts$ELEV <- feetToMeters(grid_pts$ELEV)
-  }
-  bedrock <- idw_interpolator(grid_pts)
-  # IDW is meant to be used on scattered data. Our contour lines were definately
-  # not scattered and this results in localized artifacts in our interpolation
-  # we are going to re-sample the raster again and re-do our interpolation
-  # to try and smooth over these artifacts
-  if(two_pass){
-    cat(" -- pass two (resampling to remove artifacts): ")
-    resampled <- raster::sampleRandom(bedrock,size=9999,sp=T)
-      names(resampled) <- "ELEV"
-    bedrock <- idw_interpolator(resampled)
+    base <- round(Ogallala:::feetToMeters(base),2)
   }
   if(mask){
     cat(" -- masking\n")
@@ -60,9 +55,9 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
     }
     boundary <- sp::spTransform(unpackHighPlainsAquiferBoundary(),
                                 sp::CRS(raster::projection(bedrock)))
-    bedrock <- raster::mask(bedrock, boundary)
+    base <- raster::mask(base, boundary)
   }
-  return(bedrock)
+  return(base)
 }
 # use a KNN classifier fit to lat/lon to select a neighborhood of points around
 # each well and calculates a summary statistic of your choosing (e.g., mean)
@@ -112,17 +107,17 @@ splitToTrainingTestingDatasets <- function(pts=NULL,split=0.2){
 #' the aquifer (as returned by ogallala::generateBaseElevationRaster())
 #' @export
 calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
-                                        surfaceRaster=NULL, using_metric=T){
+                                        surfaceRaster=NULL, convert_to_imperial=T){
   # sanity-check our input
   if(is.null(wellPts)) stop("wellPts= needs to be a SpatialPointsDataFrame specifying
                              well point data, as returned by unpackWellPointData()")
   if(is.null(baseRaster)){
-    baseRaster = ogallala::generateBaseElevationRaster(s=wellPts)
+    baseRaster = Ogallala::generateBaseElevationRaster(s=wellPts)
   } else if(!inherits(baseRaster,'Raster')){
     stop("baseRaster= argument must be a raster object, as returned by generateBaseElevationRaster()")
   }
   if(is.null(surfaceRaster)){
-    surfaceRaster = ogallala::scrapeNed(s=wellPts)
+    surfaceRaster = Ogallala::scrapeNed(s=wellPts)
   } else if(!inherits(baseRaster,'Raster')){
     stop("surfaceRaster= argument must be a raster object")
   }
@@ -131,9 +126,11 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
     surfaceRaster <- projectRaster(surfaceRaster,
                                    to=baseRaster)
   }
-  if(using_metric){
+  if(convert_to_imperial){
+    # temporarily transform to metric so our depth observations
+    # agree with our surface and base elevation datasets
     wellPts$well_depth_ft <- feetToMeters(wellPts$well_depth_ft)
-    wellPts$lev_va_ft <- feetToMeters(wellPts$lev_va_ft)
+    wellPts$lev_va_ft     <- feetToMeters(wellPts$lev_va_ft)
   }
   # extract surface and aquifer base information for our well points
   wellPts$surface_elevation <-
