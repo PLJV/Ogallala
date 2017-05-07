@@ -5,6 +5,8 @@
 # Author : kyle.taylor@pljv.org
 #
 
+require(Ogallala)
+
 # define our regional boundary
 boundary <- Ogallala:::scrapeHighPlainsAquiferBoundary()
   boundary <- Ogallala:::unpackHighPlainsAquiferBoundary(boundary)
@@ -14,22 +16,45 @@ wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
   wellPoints <- Ogallala:::unpackWellPointData(wellPoints)
 
 # build an aquifer base raster
-base_elevation <- Ogallala::scrapeBaseElevation()
-  base_elevation <- Ogallala::unpackBaseElevation(base_elevation)
-    base_elevation <- Ogallala::generateBaseElevationRaster(base_elevation)
+base_elevation <- Ogallala:::scrapeBaseElevation()
+  base_elevation <- Ogallala:::unpackBaseElevation()
+    base_elevation <- Ogallala:::generateBaseElevationRaster(base_elevation)
 writeRaster(base_elevation, "base_elevation.tif")
 
 # calculate saturated thickness
-wellPts <- calculateSaturatedThickness(wellPts=wellPts,
+wellPts <- Ogallala:::calculateSaturatedThickness(wellPts=wellPts,
                                        baseRaster=base_elevation,
                                        convert_to_imperial=T)
+
+# create KNN smoothed field
+wellPts <- Ogallala:::knnPointSmoother(wellPts, field="saturated_thickness")
+
 # train our interpolators
+
+# topogrid was pre-calculated in ArcGIS (below)
+
+# idw
+inverse_distance <- Ogallala:::idw_interpolator(wellPts,
+                      targetRasterGrid=base_elevation,
+                        field="saturated_thickness")
+
+writeRaster(inverse_distance, "saturated_thickness_09_idw.tif")
+
+inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPts,
+                            targetRasterGrid=base_elevation,
+                              field="saturated_thickness_smoothed")
+
+writeRaster(inverse_distance_w_knn, "saturated_thickness_09_knn_idw.tif")
+
+# polynomial trend
+polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPts, field="saturated_thickness_smoothed")
+  writeRaster(polynomial_trend$raster, "saturated_thickness_09_polynomial_trend.tif")
 
 # do some cross-validation
 
-inverse_distance       <- raster("saturated_thicknes_09_idw.tif")
-inverse_distance_w_knn <- raster("saturated_thicknes_09_knn_idw.tif")
-polynomial_trend       <- raster("saturated_thicknes_09_polynomial_trend.tif")
+inverse_distance       <- raster("saturated_thickness_09_idw.tif")
+inverse_distance_w_knn <- raster("saturated_thickness_09_knn_idw.tif")
+polynomial_trend       <- raster("saturated_thickness_09_polynomial_trend.tif")
 topogrid               <- projectRaster(raster("satThick.2009.vMcguire.tif"),
                             to=inverse_distance_w_knn)
 
@@ -130,6 +155,11 @@ print(round(colMeans(overall)))
 #
 # Now Make Our Plots
 #
+
+#
+# Plot 1 : Regional Predictive Ambiguity in Models vs. IDW Ensembles
+#
+
 dev.new()
 par(mfrow=c(2,2), mai=c(0.1,0.55,0.25,1.25))
 plot(topogrid,main="topogrid (2009)",cex=0.6, yaxt='n', xaxt='n')
@@ -142,8 +172,9 @@ plot(ensemble_pt,main="ensemble polynomial trend (2009)",cex=0.6, yaxt='n', xaxt
 plot(spTransform(boundary,CRS(projection(ensemble_pt))),add=T,border="grey")
 
 #
-# Residual error plots
+# Plot 2 : Residual error plots
 #
+
 dev.new()
 hist(na.omit(topogrid_raw_residual_error),main="",xlab="residual error",cex=0.8,breaks=75,ylab="")
   grid()
