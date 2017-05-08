@@ -87,8 +87,11 @@ topogrid               <- projectRaster(raster("satThick.2009.vMcguire.tif"),
 
 # build two predictive ensembles to test, one with topogrid and one with polynomial trend
 ensemble_tp <- stackApply(raster::stack(inverse_distance_w_knn,topogrid), fun=median, indices=1)
+ensemble_tp <- raster::mask(ensemble_tp,
+  spTransform(boundary,CRS(projection(ensemble_tp))))
 ensemble_pt <- stackApply(raster::stack(inverse_distance_w_knn,polynomial_trend), fun=median, indices=1)
-
+ensemble_pt <- raster::mask(ensemble_pt,
+  spTransform(boundary,CRS(projection(ensemble_pt))))
 # K-fold validation using random well points subsampled from the
 # dataset. IDW (without neighbor weighting) will be our null model. This is
 # a know-nothing interpolation with the original saturated thickness estimate
