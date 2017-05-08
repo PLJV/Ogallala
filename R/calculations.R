@@ -1,7 +1,7 @@
 #' hidden function for feet-> meters
 feetToMeters <- function(x) x*0.3048
 #' hidden function for meters -> feet
-metersToFeet <- function(x) x/0.3048
+metersToFeet <- function(x) x*3.28084
 #' generate a universal grid at the target resolution (500m) originally specified
 #' by V. McGuire and others for their interpolation.
 generateTargetRasterGrid <- function(s=NULL) {
