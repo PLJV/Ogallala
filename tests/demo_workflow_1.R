@@ -74,8 +74,14 @@ polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
 # do some cross-validation
 
 inverse_distance       <- raster("saturated_thickness_09_idw.tif")
+  inverse_distance <- raster::mask(inverse_distance,
+    spTransform(boundary,CRS(projection(inverse_distance))))
 inverse_distance_w_knn <- raster("saturated_thickness_09_knn_idw.tif")
+  inverse_distance_w_knn <- raster::mask(inverse_distance_w_knn,
+    spTransform(boundary,CRS(projection(inverse_distance_w_knn))))
 polynomial_trend       <- raster("saturated_thickness_09_polynomial_trend.tif")
+  polynomial_trend <- raster::mask(polynomial_trend,
+    spTransform(boundary,CRS(projection(polynomial_trend))))
 topogrid               <- projectRaster(raster("satThick.2009.vMcguire.tif"),
                             to=inverse_distance_w_knn)
 
@@ -173,7 +179,7 @@ run$testing@data <- cbind(run$testing@data,residuals)
 #
 winner <- names(which(round(colMeans(overall)) == min(round(colMeans(overall)))))
 cat(" -- the winning algorithm is:", winner,"\n")
-print(round(colMeans(overall)))
+print(round(sqrt(colMeans(overall))))
 
 #
 # Now Make Our Plots
