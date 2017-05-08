@@ -38,7 +38,7 @@ scrapeNed <- function(s=NULL){
     return(raster::raster("surface_elevation.tif"))
   }
   r <- FedData::get_ned(s, label="regional_elevation_tiles", force.redo=T)
-    raster::writeRaster(r,progress='text')
+    raster::writeRaster(r,"surface_elevation.tif",progress='text')
   return(r)
 }
 #' webscrape functionality for the hp aquifer boundary contour provided by USGS.

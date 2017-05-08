@@ -16,22 +16,28 @@ wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
   wellPoints <- Ogallala:::unpackWellPointData(wellPoints)
 
 # build an aquifer base raster
-base_elevation <- Ogallala:::scrapeBaseElevation()
-  base_elevation <- Ogallala:::unpackBaseElevation()
-    base_elevation <- Ogallala:::generateBaseElevationRaster(base_elevation)
-writeRaster(base_elevation, "base_elevation.tif")
+if(file.exists("base_elevation.tif")){
+  base_elevation <- raster("base_elevationtif")
+} else {
+  base_elevation <- Ogallala:::scrapeBaseElevation()
+    base_elevation <- Ogallala:::unpackBaseElevation()
+      base_elevation <- Ogallala:::generateBaseElevationRaster(base_elevation)
+  writeRaster(base_elevation, "base_elevation.tif")
+}
 
 # calculate saturated thickness
-wellPts <- Ogallala:::calculateSaturatedThickness(wellPts=wellPts,
+wellPoints <- Ogallala:::calculateSaturatedThickness(wellPts=wellPoints,
                                        baseRaster=base_elevation,
                                        convert_to_imperial=T)
 
 # create KNN smoothed field
-wellPts <- Ogallala:::knnPointSmoother(wellPts, field="saturated_thickness")
+wellPoints <- Ogallala:::knnPointSmoother(wellPoints, field="saturated_thickness")
 
 # train our interpolators
 
-# topogrid was pre-calculated in ArcGIS (below)
+# topogrid was pre-calculated in ArcGIS
+download.file("http://bigbeatbox.duckdns.org/aquifer/satThick.2009.vMcguire.tif",
+              "satThick.2009.vMcguire.tif")
 
 # idw
 inverse_distance <- Ogallala:::idw_interpolator(wellPts,
@@ -137,14 +143,16 @@ for(i in 1:k){
   cat(paste("[",i,"/",k,"]",sep=""))
 };
 cat("\n")
+
 # let's merge residuals from our last testing dataset into
 # a shapefile for mapping
 colnames(residuals) <- c("topogrid","idw","idw_w_knn",
                          "polynomial","ensemble_pt",
                            "ensemble_tp")
-  run$testing@data <- cbind(run$testing@data,residuals)
-    rgdal::writeOGR(run$testing,".", "well_pts_testing_validation",
-                    overwrite=T, driver="ESRI Shapefile")
+
+run$testing@data <- cbind(run$testing@data,residuals)
+  rgdal::writeOGR(run$testing,".", "well_pts_testing_validation",
+                  overwrite=T, driver="ESRI Shapefile")
 #
 # report the winning prediction
 #

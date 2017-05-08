@@ -3,7 +3,7 @@
 \name{generateBaseElevationRaster}
 \alias{generateBaseElevationRaster}
 \title{using ofr98-393, make a contour line to raster product. The units on
-bedrock elevation are feet (imperial). We are going to change them to
+base elevation are feet (imperial). We are going to change them to
 meters so they are consistent with surface DEMs from NED.}
 \usage{
 generateBaseElevationRaster(s = NULL, targetRasterGrid = NULL,
@@ -11,12 +11,12 @@ generateBaseElevationRaster(s = NULL, targetRasterGrid = NULL,
 }
 \arguments{
 \item{two_pass}{Boolean. Should we do a second pass of IDW interpolation to remove artifacts in
-bedrock elevation.}
+base elevation.}
 
 \item{feet_to_meters}{Boolean. Should we convert feet into meters?}
 }
 \description{
 using ofr98-393, make a contour line to raster product. The units on
-bedrock elevation are feet (imperial). We are going to change them to
+base elevation are feet (imperial). We are going to change them to
 meters so they are consistent with surface DEMs from NED.
 }
