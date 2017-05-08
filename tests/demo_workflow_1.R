@@ -98,11 +98,11 @@ ensemble_pt <- raster::mask(ensemble_pt,
 # a know-nothing interpolation with the original saturated thickness estimate
 # calculated for each well. The other models being tested (including the ensembles)
 # contain increasingly more information. This validation testing will be slightly biased, 
-# because we aren't actually re-training models (topogrid isn't easily scriptable for this task). 
-# This might inflate the performance of IDW algorithms, which we might expect to perform more poorly
-# without having seen all source points when interpolating. Regardless, all models will be biased the 
-# in the same way (i.e., have seen the full 2009 well dataset), so it should still make for a fair
-# comparison.
+# because we aren't actually re-training models for each K step (topogrid isn't easily 
+# scriptable for this task). This might inflate the performance of IDW algorithms, 
+# which we might expect to perform more poorly without having seen all source points when 
+# interpolating. Regardless, all models will be biased the in the same way (i.e., have 
+# seen the full 2009 well dataset), so it should still make for a fair comparison.
 
 k = 100
 overall <- data.frame(matrix(NA,nrow=k,ncol=6))
