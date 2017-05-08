@@ -25,10 +25,21 @@ if(file.exists("base_elevation.tif")){
   writeRaster(base_elevation, "base_elevation.tif")
 }
 
+if(file.exists("surface_elevation.tif")){
+  surface_elevation <- raster("surface_elevation.tif")
+} else {
+  surface_elevation <- FedData::get_ned(wellPoints, label="regional_elevation_tiles", force.redo=F)
+  surface_elevation <- raster::projectRaster(surface_elevation, to=base_elevation)
+  writeRaster(surface_elevation,"surface_elevation.tif",overwrite=T)
+}
+
 # calculate saturated thickness
 wellPoints <- Ogallala:::calculateSaturatedThickness(wellPts=wellPoints,
                                        baseRaster=base_elevation,
+                                       surfaceRaster=surface_elevation,
                                        convert_to_imperial=T)
+
+wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
 
 # create KNN smoothed field
 wellPoints <- Ogallala:::knnPointSmoother(wellPoints, field="saturated_thickness")
@@ -40,20 +51,20 @@ download.file("http://bigbeatbox.duckdns.org/aquifer/satThick.2009.vMcguire.tif"
               "satThick.2009.vMcguire.tif")
 
 # idw
-inverse_distance <- Ogallala:::idw_interpolator(wellPts,
+inverse_distance <- Ogallala:::idw_interpolator(wellPoints,
                       targetRasterGrid=base_elevation,
                         field="saturated_thickness")
 
 writeRaster(inverse_distance, "saturated_thickness_09_idw.tif")
 
-inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPts,
+inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPoints,
                             targetRasterGrid=base_elevation,
                               field="saturated_thickness_smoothed")
 
 writeRaster(inverse_distance_w_knn, "saturated_thickness_09_knn_idw.tif")
 
 # polynomial trend
-polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPts, field="saturated_thickness_smoothed")
+polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints, field="saturated_thickness_smoothed")
   writeRaster(polynomial_trend$raster, "saturated_thickness_09_polynomial_trend.tif")
 
 # do some cross-validation
