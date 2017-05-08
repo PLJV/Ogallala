@@ -64,8 +64,12 @@ inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPoints,
 writeRaster(inverse_distance_w_knn, "saturated_thickness_09_knn_idw.tif")
 
 # polynomial trend
-polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints, field="saturated_thickness_smoothed")
-  writeRaster(polynomial_trend$raster, "saturated_thickness_09_polynomial_trend.tif")
+predictor_data <- raster::stack(surface_elevation, base_elevation)
+  names(predictor_data) <- c("surf_elev","base_elev")
+polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
+  predRaster=predictor_data, field="saturated_thickness_smoothed")
+    writeRaster(polynomial_trend$raster,
+                "saturated_thickness_09_polynomial_trend.tif")
 
 # do some cross-validation
 
@@ -96,7 +100,7 @@ overall <- data.frame(matrix(NA,nrow=k,ncol=6))
                            "polynomial","ensemble_pt",
                              "ensemble_tp")
 
-residuals <- data.frame(matrix(NA,nrow=nrow(pts)*0.2,ncol=4))
+residuals <- data.frame(matrix(NA,nrow=nrow(wellPoints)*0.2,ncol=4))
 
 topogrid_raw_residual_error         <- vector()
 polynomial_trend_raw_residual_error <- vector()
@@ -104,7 +108,7 @@ idw_w_knn_raw_residual_error        <- vector()
 
 cat(" -- resampling and validating (pseudo-k-folds validation): ")
 for(i in 1:k){
-  run <- splitToTrainingTestingDatasets(pts)
+  run <- splitToTrainingTestingDatasets(wellPoints)
   tg <-
     raster::extract(topogrid,
       spTransform(run$testing,CRS(projection(topogrid))))

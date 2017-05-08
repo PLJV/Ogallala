@@ -140,17 +140,15 @@ polynomialTrendSurface <- function(pts, order=4,
   m <- glm(formula,data=na.omit(t))
   # if the user provided a rasterStack for making predictions, let's use it.
   if(!is.null(predRaster)){
-    if(sum(!colnames(t)[2:ncol(t)] %in% names(predRaster)) > 0){
-      # if we are missing predictors, are they latitude and longitude?
-      if(sum(! colnames(t)[2:ncol(t)] %in% c(names(predRaster),"longitude","latitude")) == 2){
-        cat(" -- calculating latitude and longitude")
-        predRaster$latitude  <- init(predRaster,"y")
-        predRaster$longitude <- init(predRaster,"x")
-      }
+    # if we are missing predictors, are they latitude and longitude?
+    if(sum(c("longitude","latitude") %in% names(predRaster)) < 2){
+      cat(" -- calculating latitude and longitude\n")
+      predRaster$latitude  <- init(predRaster,"y")
+      predRaster$longitude <- init(predRaster,"x")
     }
     cat(" -- projecting across regional extent:\n")
     polynomial_trend <- raster::predict(predRaster,m,progress='text',type="response")
-    return(list(m=m,raster=polynomial_trend_out))
+    return(list(m=m,raster=polynomial_trend))
   }
   # return the model by default
   return(m)
