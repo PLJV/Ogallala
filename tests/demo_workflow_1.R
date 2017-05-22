@@ -6,6 +6,8 @@
 #
 
 require(Ogallala)
+require(raster)
+require(rgdal)
 
 # define our regional boundary
 boundary <- Ogallala:::scrapeHighPlainsAquiferBoundary()
@@ -17,7 +19,7 @@ wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
 
 # build an aquifer base raster
 if(file.exists("base_elevation.tif")){
-  base_elevation <- raster("base_elevationtif")
+  base_elevation <- raster::raster("base_elevation.tif")
 } else {
   base_elevation <- Ogallala:::scrapeBaseElevation()
     base_elevation <- Ogallala:::unpackBaseElevation()
@@ -26,7 +28,7 @@ if(file.exists("base_elevation.tif")){
 }
 
 if(file.exists("surface_elevation.tif")){
-  surface_elevation <- raster("surface_elevation.tif")
+  surface_elevation <- raster::raster("surface_elevation.tif")
 } else {
   surface_elevation <- FedData::get_ned(wellPoints, label="regional_elevation_tiles", force.redo=F)
   surface_elevation <- raster::projectRaster(surface_elevation, to=base_elevation)
@@ -97,11 +99,11 @@ ensemble_pt <- raster::mask(ensemble_pt,
 # dataset. IDW (without neighbor weighting) will be our null model. This is
 # a know-nothing interpolation with the original saturated thickness estimate
 # calculated for each well. The other models being tested (including the ensembles)
-# contain increasingly more information. This validation testing will be slightly biased, 
-# because we aren't actually re-training models for each K step (topogrid isn't easily 
-# scriptable for this task). This might inflate the performance of IDW algorithms, 
-# which we might expect to perform more poorly without having seen all source points when 
-# interpolating. Regardless, all models will be biased the in the same way (i.e., have 
+# contain increasingly more information. This validation testing will be slightly biased,
+# because we aren't actually re-training models for each K step (topogrid isn't easily
+# scriptable for this task). This might inflate the performance of IDW algorithms,
+# which we might expect to perform more poorly without having seen all source points when
+# interpolating. Regardless, all models will be biased the in the same way (i.e., have
 # seen the full 2009 well dataset), so it should still make for a fair comparison.
 
 k = 100

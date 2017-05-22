@@ -94,12 +94,12 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
   # extract surface and aquifer base information for our well points
   wellPts$surface_elevation <-
     raster::extract(x=surfaceRaster,
-                    y=sp::spTransform(wellPts,CRS(projection(surfaceRaster))),
+                    y=sp::spTransform(wellPts,sp::CRS(raster::projection(surfaceRaster))),
                     method='bilinear'
                    )
   wellPts$base_elevation <-
     raster::extract(x=baseRaster,
-                    y=sp::spTransform(wellPts,CRS(projection(baseRaster))),
+                    y=sp::spTransform(wellPts,sp::CRS(raster::projection(baseRaster))),
                     method='bilinear'
                    )
   # calculate saturated thickness
