@@ -103,8 +103,26 @@ scrapeBaseElevation <- function(base_url="https://water.usgs.gov/GIS/metadata/us
   hrefs <- unlist(lapply(strsplit(as.character(hrefs),split=">|<"),function(x) x[3]))
   download.file(hrefs,destfile="ofr98-393.e00.gz")
 }
-#' hidden unpack and process well point data, returning to user as CSV
-#' @export
+#' scrape polygon features for areas reported to contain little-or-no saturated
+#' thickness that lack well data and are thus not captured in the HP Water
+#' Monitoring study.
+scrapeUnsampledZeroValues <- function(base_url="https://water.usgs.gov/GIS/metadata/usgswrd/XML/ofr99-266.xml"){
+  hrefs <- xml2::read_html(base_url)
+  hrefs <- rvest::xml_nodes(hrefs,"networkr")
+  hrefs <- hrefs[grepl(hrefs,pattern="e00")]
+  hrefs <- unlist(lapply(strsplit(as.character(hrefs),split=">|<"),function(x) x[3]))
+  download.file(hrefs,destfile="ofr99-266.e00.gz")
+}
+#' unpack a ofr99-266 vector dataset 
+unpackUnsampledZeroValues <- function(x="ofr99-266.e00"){
+  x = list.files(".",pattern=x)[1]
+  if(!file.exists(x)) stop("couldn't find aquifer base elevation contour data in cwd. use a better x= argument")
+  if(grepl(x,pattern="gz")) R.utils::gunzip(x,overwrite=T)
+  x <- rgdal::readOGR("ofr99-266.e00",verbose=F)
+    return(sp::spTransform(x,sp::CRS(raster::projection("+init=epsg:2163"))))
+}
+#' hidden function that unpacks and processes well point data, returning to
+#' user as CSV
 unpackWellPointData <- function(x=NULL){
   default_projection <- "+proj=longlat +datum=NAD83 +no_defs" # strange projection (proj will figure it out)
   unpack_file <- function(x){

@@ -90,6 +90,7 @@ sat_thickness_2008_2013 <- parallel::parLapply(cl, as.list(years),fun=buildPolyn
    sd_sat_thickness <- stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
 
 writeRaster(mean_sat_thickness_2008_2013,"mean_sat_thickness_2008_2013.tif",overwrite=T)
+writeRaster(sd_sat_thickness,"sd_sat_thickness_2008_2013.tif",overwrite=T)
 
 contours <- raster::rasterToContour(sat_thickness_2008_2013,levels=c(30,50,100,150,300,500))
   writeOGR(contours,".","contour_mean_sat_thickness_2008_2013",driver="ESRI Shapefile",overwrite=T)
@@ -101,9 +102,13 @@ lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
     return(coef(lm(x ~ years))[1])
 })
 
+writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif",overwrite=T)
+
 lm_slope <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
   if (all(is.na(x)))
     return(NA)
   else
     return(coef(lm(x ~ years))[2])
 })
+
+writeRaster(lm_slope,"slope_change_sat_thickness_2008_2013.tif",overwrite=T)

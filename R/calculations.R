@@ -64,6 +64,41 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   }
   return(base)
 }
+#' download boundaries specifying zero values for the HP region in areas
+#' poorly sampled by the HP Water-level Monitoring Study and merge 
+#' saturated thickness values into the dataset
+#' @export
+generatePseudoZeros <- function(wellPts=NULL, targetRasterGrid=NULL, size=NULL){
+  no_thickness_boundary <- rgeos::gPolygonize(Ogallala:::unpackUnsampledZeroValues())
+  if(is.null(size)){
+    # do an area-weighted sampling to figure out point sample size
+    # appropriate for our point generation
+    region_area <- Ogallala:::scrapeHighPlainsAquiferBoundary()
+       region_area <- Ogallala:::unpackHighPlainsAquiferBoundary(region_area)
+    region_area <- rgeos::gArea(region_area[
+                     region_area$AQUIFER ==
+                       unique(region_area$AQUIFER)[1],])
+
+    no_thickness_area <- rgeos::gArea(no_thickness_boundary)
+
+    size = round( (no_thickness_area/region_area) * nrow(wellPts) )
+  }
+  if(is.null(targetRasterGrid)){
+    targetRasterGrid <- Ogallala:::generateTargetRasterGrid(s=no_thickness_boundary)
+  }
+  # rasterize our polygon features
+  no_thickness_boundary <- raster::rasterize(no_thickness_boundary,
+                                             targetRasterGrid)
+  # sample stratified
+  pts <- sampleStratified(no_thickness_boundary>0, size=size, sp=T)
+    pts <- spTransform(pts,CRS(projection(wellPts)))
+  # merge with our source wellPts dataset
+  t <- wellPts@data[1:nrow(pts),]
+    t[,] <- NA
+      t$saturated_thickness <- 0
+  pts@data <- t
+  return(rbind(wellPts,pts))
+}
 #' calculate saturated thickness for a series of well points and the base elevation of
 #' the aquifer (as returned by ogallala::generateBaseElevationRaster())
 #' @export
