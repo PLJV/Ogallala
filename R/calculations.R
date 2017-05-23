@@ -154,12 +154,12 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
 #' use a KNN classifier fit to lat/lon to select a neighborhood of points around
 #' each well and calculates a summary statistic of your choosing (e.g., mean)
 #' @export
-knnPointSmoother <- function(pts=NULL, field=NULL, k=4,fun=mean){
+knnPointSmoother <- function(pts=NULL, field=NULL, k=4, fun=mean){
   index <- cbind(1:nrow(pts),
              FNN::get.knn(pts@coords, k=k)$nn.index)
   pts@data[,paste(field,"_smoothed",sep="")] <-
     apply(MARGIN=1,matrix(pts@data[as.vector(index),field],ncol=k+1),
-          FUN=mean, na.rm=T)
+          FUN=fun, na.rm=T)
   return(pts)
 }
 polynomialTrendSurface <- function(pts, order=4,

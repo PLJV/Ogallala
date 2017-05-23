@@ -8,6 +8,8 @@
 # Author : kyle.taylor@pljv.org
 #
 require(parallel)
+require(raster)
+require(rgdal)
 
 years <- 2008:2013
 
@@ -40,7 +42,8 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
   wellPoints <- Ogallala:::generatePseudoZeros(wellPoints)
 
   # create KNN smoothed field
-  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, field="saturated_thickness")
+  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=10, field="saturated_thickness")
+
   if(!file.exists(target)){
     inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness_smoothed")
 
@@ -58,7 +61,7 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     if(write){
       writeRaster(ensemble_pt,
                   paste("saturated_thickness_",y,"_ensemble_idw_polynomial_trend.tif",sep=""),
-                  progress='text')
+                  progress='text', overwrite=T)
     }
   } else {
     ensemble_pt <- raster::raster(target)
@@ -83,29 +86,29 @@ plotResiduals <- function(pts){
     geom_point(size=1.5, alpha=0.95) +
     geom_point(shape = 1,size = 1.5, color = "white", alpha=0.5) +
       xlab("longitude")+ ylab("latitude") +
-        scale_color_gradient(low="Green", high="Red")
+        scale_color_gradient(low="Red", high="Green")
 }
 
 cl <- makeCluster(6)
 sat_thickness_2008_2013 <- parallel::parLapply(cl, as.list(years),fun=buildPolynomialTrendEnsembleRasters,write=T,calc_residuals=T)
 
-mean_sat_thickness_2008_2013 <- stackApply(raster::stack(sat_thickness_2008_2013),fun=mean,indices=1)
-sd_sat_thickness_2008_2013 <- stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
+mean_sat_thickness_2008_2013 <- raster::stackApply(raster::stack(sat_thickness_2008_2013),fun=mean,indices=1)
+sd_sat_thickness_2008_2013 <- raster::stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
 
-writeRaster(mean_sat_thickness_2008_2013,"mean_sat_thickness_2008_2013.tif",overwrite=T)
-writeRaster(sd_sat_thickness,"sd_sat_thickness_2008_2013.tif",overwrite=T)
+raster::writeRaster(mean_sat_thickness_2008_2013,"mean_sat_thickness_2008_2013.tif",overwrite=T)
+raster::writeRaster(sd_sat_thickness_2008_2013,"sd_sat_thickness_2008_2013.tif",overwrite=T)
 
-contours <- raster::rasterToContour(sat_thickness_2008_2013,levels=c(30,50,100,150,300,500))
-  writeOGR(contours,".","contour_mean_sat_thickness_2008_2013",driver="ESRI Shapefile",overwrite=T)
+contours <- raster::rasterToContour(mean_sat_thickness_2008_2013,levels=c(30,50,100,150,300,500))
+  rgdal::writeOGR(contours,".","contour_mean_sat_thickness_2008_2013",driver="ESRI Shapefile",overwrite=T)
 
-lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
-  if (all(is.na(x)))
-    return(NA)
-  else
-    return(coef(lm(x ~ years))[1])
-})
+# lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
+#   if (all(is.na(x)))
+#     return(NA)
+#   else
+#     return(coef(lm(x ~ years))[1])
+# })
 
-writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif", overwrite=T)
+# writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif", overwrite=T)
 
 lm_slope <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
   if (all(is.na(x)))
