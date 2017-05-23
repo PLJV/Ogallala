@@ -1,7 +1,7 @@
 #
 # Workflow 2008-2013 ensemble prediction. I did some parallelization here to
-# speed up raster generation across the time series, do some residual error
-# calculations for each year, and do a grid-cell level time-series regression.
+# speed up raster generation across the time series and do some residual error
+# calculations for each year and do a grid-cell level time-series regression.
 # This is just demonstrative. Looking longer term, that we will instead
 # fit our regressions to the individual well point data
 #
@@ -36,38 +36,45 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     surfaceRaster=surface_elevation,
     convert_to_imperial=T)
 
-  wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
-
   # fetch spatially-weighted pseudo-zero values from the ofr99-266 report
   wellPoints <- Ogallala:::generatePseudoZeros(wellPoints)
+
+  # fix any lurking non-sense values
+  wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
 
   # create KNN smoothed field (will append "_smoothed" to target field)
   wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3, field="saturated_thickness")
 
   if(!file.exists(target)){
     inverse_distance <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness")
-
     # polynomial trend
     predictor_data <- raster::stack(surface_elevation, base_elevation)
       names(predictor_data) <- c("surf_elev","base_elev")
     polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
-      predRaster=predictor_data, field="saturated_thickness_smoothed")
+      predRaster=predictor_data, field="saturated_thickness", order=6)
     # ensemble
     ensemble_pt <- stackApply(raster::stack(inverse_distance,polynomial_trend$raster), fun=mean, indices=1)
-    # mask
-    # ensemble_pt <- raster::mask(ensemble_pt,
-    #   sp::spTransform(boundary,sp::CRS(raster::projection(ensemble_pt))))
     # write to disk, if asked
     if(write){
-      writeRaster(ensemble_pt,
-                  paste("saturated_thickness_",y,"_ensemble_idw_polynomial_trend.tif",sep=""),
-                  progress='text', overwrite=T)
+      # mask
+      out <- raster::mask(minMaxNormalize(ensemble_pt),
+        sp::spTransform(boundary,sp::CRS(raster::projection(ensemble_pt))))
+      writeRaster(out,
+        paste("saturated_thickness_",y,"_ensemble_idw_polynomial_trend.tif",sep=""),
+          progress='text', overwrite=T)
+      out <- raster::mask(minMaxNormalize(polynomial_trend$raster),
+        sp::spTransform(boundary,sp::CRS(raster::projection(polynomial_trend$raster))))
+      writeRaster(out,
+        paste("saturated_thickness_",y,"_polynomial_trend.tif",sep=""),
+          progress='text', overwrite=T)
+      rm(out)
     }
   } else {
+    cat(" -- target:",target,"found. using existing raster\n")
     ensemble_pt <- raster::raster(target)
   }
   if(calc_residuals){
-    wellPoints$residuals <- wellPoints$saturated_thickness_smoothed - raster::extract(ensemble_pt,wellPoints,df=F,sp=F)
+    wellPoints$residuals <- wellPoints$saturated_thickness - raster::extract(polynomial_trend$raster,wellPoints,df=F,sp=F)
     writeOGR(wellPoints,".",gsub(target,pattern="[.]tif$",replacement=""),driver="ESRI Shapefile", overwrite=T)
   }
 
@@ -81,12 +88,12 @@ plotResiduals <- function(pts){
   pts$lat <- pts@coords[,2]
   # compress the distribution so that outliers really stand out
   #div <- round(diff(quantile((pts$residls),na.rm=T,p=c(0.5,0.75))))
-  div <- sd(pts$residls,na.rm=T) # ~Z-score
-  pts$res_plt <- (pts$residls)/div
+  div <- sd(pts$residls,na.rm=T) # ~Z-score is easier to explain
+  pts$res_plt <- (pts$residls-mean(pts$residls,na.rm=T))/div
   ggplot(pts@data, aes(x=lon, y=lat, color=res_plt)) +
     geom_point(size=1.5, alpha=0.95) +
     geom_point(shape = 1,size = 1.5, color = "white", alpha=0.5) +
-      xlab("longitude")+ ylab("latitude") +
+      xlab("longitude")+ ylab("latitude") + labs(color="Residuals (Z-score)") +
         scale_color_gradient(low="Red", high="Green")
 }
 
@@ -94,7 +101,7 @@ cl <- makeCluster(6)
 sat_thickness_2008_2013 <- parallel::parLapply(cl, as.list(years),fun=buildPolynomialTrendEnsembleRasters,write=T,calc_residuals=T)
 
 mean_sat_thickness_2008_2013 <- raster::stackApply(raster::stack(sat_thickness_2008_2013),fun=mean,indices=1)
-sd_sat_thickness_2008_2013 <- raster::stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
+sd_sat_thickness_2008_2013   <- raster::stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
 
 raster::writeRaster(mean_sat_thickness_2008_2013,"mean_sat_thickness_2008_2013.tif",overwrite=T)
 raster::writeRaster(sd_sat_thickness_2008_2013,"sd_sat_thickness_2008_2013.tif",overwrite=T)

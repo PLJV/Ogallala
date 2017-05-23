@@ -11,6 +11,26 @@ generateTargetRasterGrid <- function(s=NULL) {
                          crs=sp::CRS("+init=epsg:2163"))
   return(grid)
 }
+#' normalize a vector X so that it's values occur on a 0-to-1 scale. Optionally
+#' project the trend to a new maximum using the to= argument. This is useful
+#' for rescaling predicted thickness to the known ranges of saturated thickness
+#' [0 to about 1,200 ft] (Weeks and Gutentag, 1981).
+minMaxNormalize <- function(x, to=1300){
+  if (all(is.na(x)))
+    return(NA)
+  if(inherits(x,"Raster")){
+      min <- cellStats(x,max)
+    range <- diff(cellStats(x,range))
+        x <- (x-min)/range
+  } else {
+    x <- (x-min(x))/(diff(range(x)))
+  }
+  if(is.null(to)){
+    return(x)
+  } else {
+    return(x*to)
+  }
+}
 #' hidden shortcut for gstat's idw interpolator
 idw_interpolator <- function(pts,targetRasterGrid=NULL,field="ELEV"){
   pts <- pts[!is.na(pts@data[,field]),] # drop any NA values
@@ -147,7 +167,8 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
 
   # some areas will have a non-sense "less than 0" depth_to_base
   # value -- assume that saturated thickness is zero in these places
-  wellPts$saturated_thickness[wellPts$saturated_thickness<0] <- 0
+  # we will do min/max normalization later to account for this...
+  # wellPts$saturated_thickness[wellPts$saturated_thickness<0] <- 0
 
   return(wellPts)
 }
