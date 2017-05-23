@@ -65,7 +65,7 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
   return(base)
 }
 #' download boundaries specifying zero values for the HP region in areas
-#' poorly sampled by the HP Water-level Monitoring Study and merge 
+#' poorly sampled by the HP Water-level Monitoring Study and merge
 #' saturated thickness values into the dataset
 #' @export
 generatePseudoZeros <- function(wellPts=NULL, targetRasterGrid=NULL, size=NULL){
@@ -156,8 +156,7 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
 #' @export
 knnPointSmoother <- function(pts=NULL, field=NULL, k=4,fun=mean){
   index <- cbind(1:nrow(pts),
-             FNN::get.knn(
-               cbind(pts@data[,'base_elevation'], pts@coords), k=k)$nn.index)
+             FNN::get.knn(pts@coords, k=k)$nn.index)
   pts@data[,paste(field,"_smoothed",sep="")] <-
     apply(MARGIN=1,matrix(pts@data[as.vector(index),field],ncol=k+1),
           FUN=mean, na.rm=T)

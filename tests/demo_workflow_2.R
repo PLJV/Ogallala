@@ -36,6 +36,9 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
 
   wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
 
+  # fetch spatially-weighted pseudo-zero values from the ofr99-266 report
+  wellPoints <- Ogallala:::generatePseudoZeros(wellPoints)
+
   # create KNN smoothed field
   wellPoints <- Ogallala:::knnPointSmoother(wellPoints, field="saturated_thickness")
   if(!file.exists(target)){
@@ -86,8 +89,8 @@ plotResiduals <- function(pts){
 cl <- makeCluster(6)
 sat_thickness_2008_2013 <- parallel::parLapply(cl, as.list(years),fun=buildPolynomialTrendEnsembleRasters,write=T,calc_residuals=T)
 
- mean_sat_thickness <- stackApply(raster::stack(sat_thickness_2008_2013),fun=mean,indices=1)
-   sd_sat_thickness <- stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
+mean_sat_thickness_2008_2013 <- stackApply(raster::stack(sat_thickness_2008_2013),fun=mean,indices=1)
+sd_sat_thickness_2008_2013 <- stackApply(raster::stack(sat_thickness_2008_2013),fun=sd,indices=1)
 
 writeRaster(mean_sat_thickness_2008_2013,"mean_sat_thickness_2008_2013.tif",overwrite=T)
 writeRaster(sd_sat_thickness,"sd_sat_thickness_2008_2013.tif",overwrite=T)
@@ -102,7 +105,7 @@ lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
     return(coef(lm(x ~ years))[1])
 })
 
-writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif",overwrite=T)
+writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif", overwrite=T)
 
 lm_slope <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
   if (all(is.na(x)))
