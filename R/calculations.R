@@ -14,7 +14,8 @@ generateTargetRasterGrid <- function(s=NULL) {
 #' normalize a vector X so that it's values occur on a 0-to-1 scale. Optionally
 #' project the trend to a new maximum using the to= argument. This is useful
 #' for rescaling predicted thickness to the known ranges of saturated thickness
-#' [0 to about 1,200 ft] (Weeks and Gutentag, 1981).
+#' throughout the HP region [0 to about 1,200 ft] (Weeks and Gutentag, 1981)
+#' @export
 minMaxNormalize <- function(x, to=1300){
   if (all(is.na(x)))
     return(NA)
