@@ -41,22 +41,22 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
   # fetch spatially-weighted pseudo-zero values from the ofr99-266 report
   wellPoints <- Ogallala:::generatePseudoZeros(wellPoints)
 
-  # create KNN smoothed field
-  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=10, field="saturated_thickness")
+  # create KNN smoothed field (will append "_smoothed" to target field)
+  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3, field="saturated_thickness")
 
   if(!file.exists(target)){
-    inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness_smoothed")
+    inverse_distance <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness")
 
     # polynomial trend
     predictor_data <- raster::stack(surface_elevation, base_elevation)
       names(predictor_data) <- c("surf_elev","base_elev")
     polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
       predRaster=predictor_data, field="saturated_thickness_smoothed")
-
     # ensemble
-    ensemble_pt <- stackApply(raster::stack(inverse_distance_w_knn,polynomial_trend$raster), fun=median, indices=1)
-    ensemble_pt <- raster::mask(ensemble_pt,
-      sp::spTransform(boundary,sp::CRS(raster::projection(ensemble_pt))))
+    ensemble_pt <- stackApply(raster::stack(inverse_distance,polynomial_trend$raster), fun=mean, indices=1)
+    # mask
+    # ensemble_pt <- raster::mask(ensemble_pt,
+    #   sp::spTransform(boundary,sp::CRS(raster::projection(ensemble_pt))))
     # write to disk, if asked
     if(write){
       writeRaster(ensemble_pt,
@@ -80,7 +80,8 @@ plotResiduals <- function(pts){
   pts$lon <- pts@coords[,1]
   pts$lat <- pts@coords[,2]
   # compress the distribution so that outliers really stand out
-  div <- round(diff(quantile((pts$residls),na.rm=T,p=c(0.5,0.75))))
+  #div <- round(diff(quantile((pts$residls),na.rm=T,p=c(0.5,0.75))))
+  div <- sd(pts$residls,na.rm=T) # ~Z-score
   pts$res_plt <- (pts$residls)/div
   ggplot(pts@data, aes(x=lon, y=lat, color=res_plt)) +
     geom_point(size=1.5, alpha=0.95) +
