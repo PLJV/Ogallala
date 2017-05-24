@@ -42,7 +42,7 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
 
   # downsample wells at the margins at the aquifer boundary
   wellPoints <- Ogallala:::downsampleAlongAquiferBoundary(wellPoints,
-    boundary, width=30000)
+    boundary, width=10000)
 
   # create KNN smoothed field (will append "_smoothed" to target field)
   wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3,

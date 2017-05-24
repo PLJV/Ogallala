@@ -30,6 +30,18 @@ minMaxNormalize <- function(x, to=1300){
     return(x*to)
   }
 }
+#' normalize a vector x to quantiles. By default (if no quantiles are specified
+#' for calculating a range), we will use 1 SD and produce a Z-score equivalent
+#' @export
+quantileNormalize <- function(x, quantiles=NULL, to=NULL){
+  if(!is.null(quantiles)){
+    div <- round(diff(quantile((x),na.rm=T,p=quantiles)))
+  } else {
+    div <- sd(x,na.rm=T) # scale to 1 SD by default
+  }
+  x <- (x-mean(x,na.rm=T))/div
+  return(x)
+}
 #' hidden shortcut for gstat's idw interpolator
 idw_interpolator <- function(pts,targetRasterGrid=NULL,field="ELEV"){
   pts <- pts[!is.na(pts@data[,field]),] # drop any NA values
