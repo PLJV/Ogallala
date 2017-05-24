@@ -243,7 +243,7 @@ knnPointSmoother <- function(pts=NULL, field=NULL, k=4, fun=mean){
 #' testing for a spatially-weighted GLM that attempts to down-weight
 #' clustered records and up-weight diffuse records using KNN.
 #' @export
-spatiallyWeightedGLM <- function(pts, order=4, field=NULL, k=5){
+mKNNWeights <- function(pts, order=4, field=NULL, k=5){
   t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
     colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
       t <- data.frame(t)
@@ -255,8 +255,22 @@ spatiallyWeightedGLM <- function(pts, order=4, field=NULL, k=5){
   t$nn_distances <- round(Ogallala:::quantileNormalize(
     rowMeans(FNN::get.knn(pts@coords, k=k)$nn.dist)))
   t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
+    t$nn_distances <- t$nn_distances + 1
   m <- glm(formula,data=na.omit(t),weights=t$nn_distances)
   return(m)
+}
+#' testing for a standard GLM with polynomial terms on latitude
+#' and longitude
+#' @export
+mSpatialTrend <- funciton(pts, order=4, field=NULL){
+  t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
+    colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
+      t <- data.frame(t)
+  cat(" -- building a polynomial trend model\n")
+  covs <- paste("poly(",colnames(t)[2:ncol(t)],",", order, ")",sep="")
+    covs <- paste(covs,collapse="+")
+      formula <- as.formula(paste(field,"~",covs,collapse=""))
+  return(glm(formula,data=na.omit(t)))
 }
 #' fit a higher-order GLM to our spatial data and a field of your choice
 #' and use it to generate a polynomial trend raster surface of that field
@@ -265,14 +279,7 @@ polynomialTrendSurface <- function(pts, order=4,
                                    field=NULL, predRaster=NULL){
   # testing : removing default and checking the performance of a spatially-weighted glm
   m <- spatiallyWeightedGLM(pts, order=order, field=field, k=5)
-  # t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
-  #   colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
-  #     t <- data.frame(t)
-  # cat(" -- building a polynomial trend model\n")
-  # covs <- paste("poly(",colnames(t)[2:ncol(t)],",", order, ")",sep="")
-  #   covs <- paste(covs,collapse="+")
-  #     formula <- as.formula(paste(field,"~",covs,collapse=""))
-  # m <- glm(formula,data=na.omit(t))
+  # m <- mSpatialTrendGLM(pts, order=order, field=field)
 
   # if the user provided a rasterStack for making predictions, let's use it.
   if(!is.null(predRaster)){

@@ -40,13 +40,17 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
   wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
   wellPoints@data[wellPoints$saturated_thickness<0,]$saturated_thickness <- 0
 
+  # testing: improves results of standard polynomial trend
   # downsample wells at the margins at the aquifer boundary
-  wellPoints <- Ogallala:::downsampleAlongAquiferBoundary(wellPoints,
-    boundary, width=10000)
+  # wellPoints <- Ogallala:::downsampleAlongAquiferBoundary(wellPoints,
+  #   boundary, width=10000)
+
+  # testing : implemented a spatially-weighted GLM that leverages KNN in
+  # model-space
 
   # create KNN smoothed field (will append "_smoothed" to target field)
-  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3,
-    field="saturated_thickness")
+  # wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3,
+  #   field="saturated_thickness")
 
   if(!file.exists(target)){
     inverse_distance <- Ogallala:::idw_interpolator(wellPoints,
@@ -58,7 +62,8 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
       predRaster=predictor_data, field="saturated_thickness", order=4)
     # ensemble
-    ensemble_pt <- stackApply(raster::stack(inverse_distance,polynomial_trend$raster), fun=mean, indices=1)
+    ensemble_pt <- stackApply(raster::stack(inverse_distance,
+      polynomial_trend$raster), fun=mean, indices=1)
     # write to disk, if asked
     if(write){
       # mask
