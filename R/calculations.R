@@ -262,7 +262,7 @@ mKNNWeights <- function(pts, order=4, field=NULL, k=5){
 #' testing for a standard GLM with polynomial terms on latitude
 #' and longitude
 #' @export
-mSpatialTrend <- funciton(pts, order=4, field=NULL){
+mSpatialTrend <- function(pts, order=4, field=NULL){
   t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
     colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
       t <- data.frame(t)
