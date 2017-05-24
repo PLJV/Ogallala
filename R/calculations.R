@@ -266,7 +266,8 @@ mKNNWeights <- function(pts, order=4, field=NULL, k=5){
   t$nn_distances <- t$nn_distances+abs(min(t$nn_distances))
   #t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
     #t$nn_distances <- t$nn_distances + 1
-  m <- glm(formula,data=na.omit(t),weights=t$nn_distances)
+  t<-na.omit(t)
+  m <- glm(formula,data=t,weights=t$nn_distances)
   return(m)
 }
 #' testing for a standard GLM with polynomial terms on latitude
