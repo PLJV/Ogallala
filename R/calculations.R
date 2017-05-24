@@ -254,8 +254,8 @@ mKNNWeights <- function(pts, order=4, field=NULL, k=5){
   # append our scaled composite NN distances
   t$nn_distances <- round(Ogallala:::quantileNormalize(
     rowMeans(FNN::get.knn(pts@coords, k=k)$nn.dist)))
-  t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
-    t$nn_distances <- t$nn_distances + 1
+  #t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
+    #t$nn_distances <- t$nn_distances + 1
   m <- glm(formula,data=na.omit(t),weights=t$nn_distances)
   return(m)
 }
