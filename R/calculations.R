@@ -35,7 +35,7 @@ minMaxNormalize <- function(x, to=1300){
 #' @export
 quantileNormalize <- function(x, quantiles=NULL, to=NULL){
   if(!is.null(quantiles)){
-    div <- round(diff(quantile((x),na.rm=T,p=quantiles)))
+    div <- diff(quantile(x,na.rm=T,p=quantiles))
   } else {
     div <- sd(x,na.rm=T) # scale to 1 SD by default
   }
