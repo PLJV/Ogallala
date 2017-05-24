@@ -102,24 +102,28 @@ generateZeroBurnInSurface <- function(r=NULL, width=500){
   # define our default (unweighted) target mask
   target <- r
     values(target) <- 1
-  # define our "zero" mask
+  # define our "zero" mask, with some arbitrary wiggle-room
   no_thickness_boundary <- rgeos::gPolygonize(
     Ogallala:::unpackUnsampledZeroValues())
-  surface <- rgeos::gBuffer(no_thickness_boundary,byid=F,width=-1)
+  no_thickness_boundary <- rgeos::gBuffer(no_thickness_boundary,
+    byid=F,width=width*2)
+  surface <- rgeos::gBuffer(no_thickness_boundary,byid=F,width=0)
     surface$val <- NA
-  for(i in 1:100){
-    focal <- rgeos::gBuffer(no_thickness_boundary,byid=F,width=i*-width)
+  # not really count controlled -- limited by a null return from gBuffer
+  maxCount = 500;
+  for(i in 1:maxCount){
+    focal <- rgeos::gBuffer(no_thickness_boundary, byid=F, width=i*-width)
     if(is.null(focal)){
-      i=100
+      i = maxCount;
     } else {
       focal$val <- i
-      surface <- bind(surface,focal)
+      surface <- bind(surface, focal)
     }
   }
+  # apply a power function to our linear increment and rasterize
   surface$val <- as.numeric(surface$val)
-    surface$val <- 1-round(surface$val/max(surface$val,na.rm=T),2)
+    surface$val <- 1-((surface$val/max(surface$val,na.rm=T))^(1/2))
       surface$val[is.na(surface$val)] <- 1
-  cat(" -- burning:\n")
   surface <- rasterize(surface,field='val',
     y=target, background=1,progress='text')
   return(r*surface)
