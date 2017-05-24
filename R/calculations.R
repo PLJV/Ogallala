@@ -122,7 +122,7 @@ generateAquiferBoundaryBuffer <- function(boundary=NULL, width=5000){
 #' downsample well points that occur along the aquifer boundary
 #' @export
 downsampleAlongAquiferBoundary <- function(wellPoints=NULL, boundary=NULL, width=3000){
-  buffer <- spTransform(Ogallala:::generateAquiferBoundaryBuffer(boundary),
+  buffer <- spTransform(Ogallala:::generateAquiferBoundaryBuffer(boundary, width=width),
     CRS(projection(wellPoints)))
   over <- !is.na(as.vector(sp::over(wellPoints, buffer)))
   cat(" -- downsampling",sum(over),

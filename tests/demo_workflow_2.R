@@ -42,7 +42,7 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
 
   # downsample wells at the margins at the aquifer boundary
   wellPoints <- Ogallala:::downsampleAlongAquiferBoundary(wellPoints,
-    boundary, width=3000)
+    boundary, width=30000)
 
   # create KNN smoothed field (will append "_smoothed" to target field)
   wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3,
@@ -54,7 +54,7 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     predictor_data <- raster::stack(surface_elevation, base_elevation)
       names(predictor_data) <- c("surf_elev","base_elev")
     polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
-      predRaster=predictor_data, field="saturated_thickness", order=6)
+      predRaster=predictor_data, field="saturated_thickness", order=4)
     # ensemble
     ensemble_pt <- stackApply(raster::stack(inverse_distance,polynomial_trend$raster), fun=mean, indices=1)
     # write to disk, if asked
