@@ -2,10 +2,12 @@
 % Please edit documentation in R/downloaders.R
 \name{unpackWellPointData}
 \alias{unpackWellPointData}
-\title{hidden unpack and process well point data, returning to user as CSV}
+\title{hidden function that unpacks and processes well point data, returning to
+user as CSV}
 \usage{
 unpackWellPointData(x = NULL)
 }
 \description{
-hidden unpack and process well point data, returning to user as CSV
+hidden function that unpacks and processes well point data, returning to
+user as CSV
 }
