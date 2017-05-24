@@ -17,11 +17,9 @@ generateTargetRasterGrid <- function(s=NULL) {
 #' throughout the HP region [0 to about 1,200 ft] (Weeks and Gutentag, 1981)
 #' @export
 minMaxNormalize <- function(x, to=1300){
-  if (all(is.na(x)))
-    return(NA)
   if(inherits(x,"Raster")){
-      min <- cellStats(x,max)
-    range <- diff(cellStats(x,range))
+      min <- cellStats(x,stat='min',na.rm=T)
+    range <- diff(cellStats(x,stat=range,na.rm=T))
         x <- (x-min)/range
   } else {
     x <- (x-min(x))/(diff(range(x)))
@@ -84,6 +82,52 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
     base <- raster::mask(base, boundary)
   }
   return(base)
+}
+#' Do a burn-in of an input raster and the ofr99-266 dry areas
+#' dataset
+generateZeroBurnInSurface <- function(r=NULL, width=500){
+  # define our default (unweighted) target mask
+  target <- r
+    values(target) <- 1
+  # define our "zero" mask
+  no_thickness_boundary <- rgeos::gPolygonize(
+    Ogallala:::unpackUnsampledZeroValues())
+  surface <- rgeos::gBuffer(no_thickness_boundary,byid=F,width=-1)
+    surface$val <- NA
+  for(i in 1:100){
+    focal <- rgeos::gBuffer(no_thickness_boundary,byid=F,width=i*-width)
+    if(is.null(focal)){
+      i=100
+    } else {
+      focal$val <- i
+      surface <- bind(surface,focal)
+    }
+  }
+  surface$val <- as.numeric(surface$val)
+    surface$val <- 1-round(surface$val/max(surface$val,na.rm=T),2)
+      surface$val[is.na(surface$val)] <- 1
+  cat(" -- burning:\n")
+  surface <- rasterize(surface,field='val',
+    y=target, background=1,progress='text')
+  return(r*surface)
+}
+#' generate a uniform buffer region around the HP aquifer boundary
+#' that can be used for downsampling
+generateAquiferBoundaryBuffer <- function(boundary=NULL, width=5000){
+  buffer <- rgeos::gBuffer(boundary, width=-1, byid=F)
+    buffer <- rgeos::gSymdifference(buffer,
+      rgeos::gBuffer(boundary, width=-width, byid=F))
+  return(buffer)
+}
+#' downsample well points that occur along the aquifer boundary
+#' @export
+downsampleAlongAquiferBoundary <- function(wellPoints=NULL, boundary=NULL, width=3000){
+  buffer <- spTransform(Ogallala:::generateAquiferBoundaryBuffer(boundary),
+    CRS(projection(wellPoints)))
+  over <- !is.na(as.vector(sp::over(wellPoints, buffer)))
+  cat(" -- downsampling",sum(over),
+    "points along HP aquifer boundary\n")
+  return(wellPoints[!over,])
 }
 #' download boundaries specifying zero values for the HP region in areas
 #' poorly sampled by the HP Water-level Monitoring Study and merge

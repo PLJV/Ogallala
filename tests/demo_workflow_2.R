@@ -36,18 +36,21 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     surfaceRaster=surface_elevation,
     convert_to_imperial=T)
 
-  # fetch spatially-weighted pseudo-zero values from the ofr99-266 report
-  wellPoints <- Ogallala:::generatePseudoZeros(wellPoints)
-
-  # fix any lurking non-sense values
+  # remove any lurking non-sense values
   wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
+  wellPoints@data[wellPoints$saturated_thickness<0,]$saturated_thickness <- 0
+
+  # downsample wells at the margins at the aquifer boundary
+  wellPoints <- Ogallala:::downsampleAlongAquiferBoundary(wellPoints,
+    boundary, width=3000)
 
   # create KNN smoothed field (will append "_smoothed" to target field)
-  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3, field="saturated_thickness")
+  wellPoints <- Ogallala:::knnPointSmoother(wellPoints, k=3,
+    field="saturated_thickness")
 
   if(!file.exists(target)){
     inverse_distance <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness")
-    # polynomial trend
+    # project polynomial trend
     predictor_data <- raster::stack(surface_elevation, base_elevation)
       names(predictor_data) <- c("surf_elev","base_elev")
     polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
@@ -57,12 +60,12 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     # write to disk, if asked
     if(write){
       # mask
-      out <- raster::mask(minMaxNormalize(ensemble_pt),
+      out <- raster::mask(ensemble_pt,
         sp::spTransform(boundary,sp::CRS(raster::projection(ensemble_pt))))
       writeRaster(out,
         paste("saturated_thickness_",y,"_ensemble_idw_polynomial_trend.tif",sep=""),
           progress='text', overwrite=T)
-      out <- raster::mask(minMaxNormalize(polynomial_trend$raster),
+      out <- raster::mask(polynomial_trend$raster,
         sp::spTransform(boundary,sp::CRS(raster::projection(polynomial_trend$raster))))
       writeRaster(out,
         paste("saturated_thickness_",y,"_polynomial_trend.tif",sep=""),
@@ -77,7 +80,6 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     wellPoints$residuals <- wellPoints$saturated_thickness - raster::extract(polynomial_trend$raster,wellPoints,df=F,sp=F)
     writeOGR(wellPoints,".",gsub(target,pattern="[.]tif$",replacement=""),driver="ESRI Shapefile", overwrite=T)
   }
-
   return(ensemble_pt)
 }
 
