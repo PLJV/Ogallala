@@ -97,6 +97,7 @@ generateBaseElevationRaster <- function(s=NULL,targetRasterGrid=NULL,
 }
 #' Do a burn-in of an input raster and the ofr99-266 dry areas
 #' dataset
+#' @export
 generateZeroBurnInSurface <- function(r=NULL, width=500){
   # define our default (unweighted) target mask
   target <- r
@@ -141,9 +142,8 @@ downsampleAlongAquiferBoundary <- function(wellPoints=NULL, boundary=NULL, width
     "points along HP aquifer boundary\n")
   return(wellPoints[!over,])
 }
-#' download boundaries specifying zero values for the HP region in areas
-#' poorly sampled by the HP Water-level Monitoring Study and merge
-#' saturated thickness values into the dataset
+#' download the ofr99-266 dry areas dataset and randomly generate points
+#' within the polygon features to use as pseudo-zero sat. thickness data
 #' @export
 generatePseudoZeros <- function(wellPts=NULL, targetRasterGrid=NULL, size=NULL){
   no_thickness_boundary <- rgeos::gPolygonize(Ogallala:::unpackUnsampledZeroValues())
@@ -240,16 +240,40 @@ knnPointSmoother <- function(pts=NULL, field=NULL, k=4, fun=mean){
           FUN=fun, na.rm=T)
   return(pts)
 }
-polynomialTrendSurface <- function(pts, order=4,
-                                   field=NULL, predRaster=NULL){
+#' testing for a spatially-weighted GLM that attempts to down-weight
+#' clustered records and up-weight diffuse records using KNN.
+#' @export
+spatiallyWeightedGLM <- function(pts, order=4, field=NULL, k=5){
   t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
     colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
       t <- data.frame(t)
-  cat(" -- building a polynomial trend model\n")
+  # determine the covariates we are going to fit for this model
   covs <- paste("poly(",colnames(t)[2:ncol(t)],",", order, ")",sep="")
     covs <- paste(covs,collapse="+")
       formula <- as.formula(paste(field,"~",covs,collapse=""))
-  m <- glm(formula,data=na.omit(t))
+  # append our scaled composite NN distances
+  t$nn_distances <- round(Ogallala:::quantileNormalize(
+    rowMeans(FNN::get.knn(pts@coords, k=k)$nn.dist)))
+  t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
+  m <- glm(formula,data=na.omit(t),weights=t$nn_distances)
+  return(m)
+}
+#' fit a higher-order GLM to our spatial data and a field of your choice
+#' and use it to generate a polynomial trend raster surface of that field
+#' @export
+polynomialTrendSurface <- function(pts, order=4,
+                                   field=NULL, predRaster=NULL){
+  # testing : removing default and checking the performance of a spatially-weighted glm
+  m <- spatiallyWeightedGLM(pts, order=order, field=field, k=5)
+  # t <- cbind(pts@data[,field], pts@coords, pts$surface_elevation, pts$base_elevation)
+  #   colnames(t) <- c(field,"longitude","latitude","surf_elev","base_elev")
+  #     t <- data.frame(t)
+  # cat(" -- building a polynomial trend model\n")
+  # covs <- paste("poly(",colnames(t)[2:ncol(t)],",", order, ")",sep="")
+  #   covs <- paste(covs,collapse="+")
+  #     formula <- as.formula(paste(field,"~",covs,collapse=""))
+  # m <- glm(formula,data=na.omit(t))
+
   # if the user provided a rasterStack for making predictions, let's use it.
   if(!is.null(predRaster)){
     # if we are missing predictors, are they latitude and longitude?

@@ -49,7 +49,9 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
     field="saturated_thickness")
 
   if(!file.exists(target)){
-    inverse_distance <- Ogallala:::idw_interpolator(wellPoints,targetRasterGrid=base_elevation,field="saturated_thickness")
+    inverse_distance <- Ogallala:::idw_interpolator(wellPoints,
+      targetRasterGrid=base_elevation,
+        field="saturated_thickness")
     # project polynomial trend
     predictor_data <- raster::stack(surface_elevation, base_elevation)
       names(predictor_data) <- c("surf_elev","base_elev")
