@@ -278,7 +278,7 @@ mSpatialTrend <- function(pts, order=4, field=NULL){
 polynomialTrendSurface <- function(pts, order=4,
                                    field=NULL, predRaster=NULL){
   # testing : removing default and checking the performance of a spatially-weighted glm
-  m <- spatiallyWeightedGLM(pts, order=order, field=field, k=5)
+  m <- mKNNWeights(pts, order=order, field=field, k=5)
   # m <- mSpatialTrendGLM(pts, order=order, field=field)
 
   # if the user provided a rasterStack for making predictions, let's use it.
