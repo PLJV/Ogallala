@@ -118,14 +118,14 @@ raster::writeRaster(sd_sat_thickness_2008_2013,"sd_sat_thickness_2008_2013.tif",
 contours <- raster::rasterToContour(mean_sat_thickness_2008_2013,levels=c(30,50,100,150,300,500))
   rgdal::writeOGR(contours,".","contour_mean_sat_thickness_2008_2013",driver="ESRI Shapefile",overwrite=T)
 
-# lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
-#   if (all(is.na(x)))
-#     return(NA)
-#   else
-#     return(coef(lm(x ~ years))[1])
-# })
+lm_intercept <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
+  if (all(is.na(x)))
+    return(NA)
+  else
+    return(coef(lm(x ~ years))[1])
+})
 
-# writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif", overwrite=T)
+writeRaster(lm_intercept,"intercept_change_sat_thickness_2008_2013.tif", overwrite=T)
 
 lm_slope <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
   if (all(is.na(x)))
@@ -135,3 +135,19 @@ lm_slope <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
 })
 
 writeRaster(lm_slope,"slope_change_sat_thickness_2008_2013.tif",overwrite=T)
+
+lm_residuals <- calc(raster::stack(sat_thickness_2008_2013), fun = function(x) {
+  if (all(is.na(x)))
+    return(NA)
+  else
+    return(sum(sqrt((residuals(lm(x~years)))^2)))
+})
+
+writeRaster(lm_residuals,"residuals_change_sat_thickness_2008_2013.tif",overwrite=T)
+
+# extrapolate the trend
+sat_thick_2030 <- (lm_slope*2030)+lm_intercept
+sat_thick_2050 <- (lm_slope*2050)+lm_intercept
+
+writeRaster(sat_thick_2030,"sat_thick_2030.tif",progress='text')
+writeRaster(sat_thick_2050,"sat_thick_2050.tif",progress='text')
