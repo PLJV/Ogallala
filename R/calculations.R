@@ -226,10 +226,15 @@ calculateSaturatedThickness <- function(wellPts=NULL,baseRaster=NULL,
   # units are always reported in (imperial) feet of saturated thickness
   wellPts$saturated_thickness <- if(convert_to_imperial) round(metersToFeet(wellPts$saturated_thickness),2) else round(wellPts$saturated_thickness,2)
 
-  # some areas will have a non-sense "less than 0" depth_to_base
-  # value -- assume that saturated thickness is zero in these places
-  # we will do min/max normalization later to account for this...
-  # wellPts$saturated_thickness[wellPts$saturated_thickness<0] <- 0
+  # remove any lurking non-sense values
+  wellPts <- wellPts[!is.na(wellPts@data$saturated_thickness),]
+
+  # drop points that have negative values for surface-base elevation
+  drop <- (wellPts$surface_elevation-wellPts$base_elevation) < 0
+  wellPts <- wellPts[!drop,]
+
+  # remove any well that have negative saturated thickness
+  wellPts <- wellPts[wellPts@data$saturated_thickness>=0,]
 
   return(wellPts)
 }
@@ -261,7 +266,8 @@ mKNNWeights <- function(pts, order=4, field=NULL, k=5){
   t$nn_distances <- t$nn_distances+abs(min(t$nn_distances))
   #t$nn_distances[t$nn_distances<0] <- 0 # spatially clustered
     #t$nn_distances <- t$nn_distances + 1
-  m <- glm(formula,data=na.omit(t),weights=t$nn_distances)
+  t<-na.omit(t)
+  m <- glm(formula,data=t,weights=t$nn_distances)
   return(m)
 }
 #' testing for a standard GLM with polynomial terms on latitude

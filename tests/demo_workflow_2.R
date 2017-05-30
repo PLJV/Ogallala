@@ -38,7 +38,13 @@ buildPolynomialTrendEnsembleRasters <- function(y=NULL, write=FALSE, calc_residu
 
   # remove any lurking non-sense values
   wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
-  wellPoints@data[wellPoints$saturated_thickness<0,]$saturated_thickness <- 0
+
+  # drop points that have negative values for surface-base elevation
+  drop <- (wellPoints$surface_elevation-wellPoints$base_elevation) < 0
+  wellPoints <- wellPoints[!drop,]
+
+  # remove any well that have negative saturated thickness
+  wellPoints <- wellPoints[wellPoints@data$saturated_thickness>=0,]
 
   # testing: improves results of standard polynomial trend
   # downsample wells at the margins at the aquifer boundary
