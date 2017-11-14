@@ -1,220 +1,119 @@
 #
-# Workflow 2009 Aquifer saturated thickness validation and ensemble prediction
-# generator
+# Workflow that generates a basic aquifer saturated thickness raster
+# for a single year of well depth data
 #
 # Author : kyle.taylor@pljv.org
 #
 
-require(Ogallala)
-require(raster)
-require(rgdal)
+if(!require(Ogallala)) {
+  install.packages("devtools", repos="https://cran.revolutionanalytics.com")
+  stopifnot(require('devtools'))
+  devtools::install_github("PLJV/Ogallala")
+  stopifnot(require("Ogallala"))
+}
+if(!require('raster')){
+  install.packages("raster", repos="https://cran.revolutionanalytics.com")
+  stopifnot(require('raster'))
+}
+if(!require('rgdal')){
+  install.packages("rgdal", repos="https://cran.revolutionanalytics.com")
+  stopifnot(require('rgdal'))
+}
 
-# define our regional boundary
-boundary <- Ogallala:::scrapeHighPlainsAquiferBoundary()
-  boundary <- Ogallala:::unpackHighPlainsAquiferBoundary(boundary)
+# 2013 is the most recent year that the USGS has published. See:
+# https://ne.water.usgs.gov/ogw/hpwlms/data.html
+year <- 2013 
+
+# define our regional boundary as the delineation of the aquifer
+boundary <- get(
+    'boundary', 
+    envir=asNamespace('Ogallala')
+  )
 
 # fetch our input well data
-wellPoints <- Ogallala:::scrapeWellPointData(years=2009)
-  wellPoints <- Ogallala:::unpackWellPointData(wellPoints)
+wellPoints <- Ogallala:::unpackWellPointData(Ogallala:::scrapeWellPointData(
+  years=year
+  ))
 
-# build an aquifer base raster
-if(file.exists("base_elevation.tif")){
-  base_elevation <- raster::raster("base_elevation.tif")
-} else {
-  base_elevation <- Ogallala:::scrapeBaseElevation()
-    base_elevation <- Ogallala:::unpackBaseElevation()
-      base_elevation <- Ogallala:::generateBaseElevationRaster(base_elevation)
-  writeRaster(base_elevation, "base_elevation.tif")
-}
+# let's use the included base elevation and surface_elevation by default
+# we could swap these out for our own if we wanted
+base_elevation <- get(
+    'base_elevation',
+    envir=asNamespace('Ogallala')
+  )
 
-if(file.exists("surface_elevation.tif")){
-  surface_elevation <- raster::raster("surface_elevation.tif")
-} else {
-  surface_elevation <- FedData::get_ned(wellPoints, label="regional_elevation_tiles", force.redo=F)
-  surface_elevation <- raster::projectRaster(surface_elevation, to=base_elevation)
-  writeRaster(surface_elevation,"surface_elevation.tif",overwrite=T)
-}
+surface_elevation <- get(
+    'surface_elevation',
+    envir=asNamespace('Ogallala')
+  )
 
-# calculate saturated thickness
-wellPoints <- Ogallala:::calculateSaturatedThickness(wellPts=wellPoints,
-                                       baseRaster=base_elevation,
-                                       surfaceRaster=surface_elevation,
-                                       convert_to_imperial=T)
+# calculate saturated thickness field and adds it to our well points
+# dataset
+wellPoints <- Ogallala::calc_saturated_thickness(
+    wellPts=wellPoints,
+    baseRaster=base_elevation,
+    surfaceRaster=surface_elevation,
+    convert_to_imperial=T
+  )
 
 wellPoints <- wellPoints[!is.na(wellPoints@data$saturated_thickness),]
 
-# create KNN smoothed field
-wellPoints <- Ogallala:::knnPointSmoother(wellPoints, field="saturated_thickness")
+# polynomial trend surface from lat + lon + surface elev + bedrock elev
+predictorData <- raster::stack(surface_elevation, base_elevation)
+  names(predictorData) <- c("surf_elev","base_elev")
+
+# create KNN smoothed field (literally averages sat_thickness values
+# for each point using that point's neighbors -- from V. McGuire.
+
+wellPoints <- Ogallala:::knn_point_smoother(
+    wellPoints, 
+    field="saturated_thickness",
+    k=3 # explore K=2,3,4,etc...
+  )
 
 # train our interpolators
 
-# topogrid was pre-calculated in ArcGIS
-download.file("http://bigbeatbox.duckdns.org/aquifer/satThick.2009.vMcguire.tif",
-              "satThick.2009.vMcguire.tif")
+polynomialTrendSurface <- Ogallala::calc_polynomial_trend_surface(
+    wellPoints,
+    predRaster=predictorData, 
+    field="saturated_thickness_smoothed",
+    order=3    
+  )
 
-# idw
-inverse_distance <- Ogallala:::idw_interpolator(wellPoints,
-                      targetRasterGrid=base_elevation,
-                        field="saturated_thickness")
+# check the fit of our model -- do our polynomial terms have a large effect?
+# does the map look like a candy-cane? If so, reduce the order of our polynomials
+# until the results look reasonable
 
-writeRaster(inverse_distance, "saturated_thickness_09_idw.tif")
+summary(polynomialTrendSurface$m)
 
-inverse_distance_w_knn <- Ogallala:::idw_interpolator(wellPoints,
-                            targetRasterGrid=base_elevation,
-                              field="saturated_thickness_smoothed")
+# are we predicting outside of the theoretical max sat. 
+# thickness of the aquifer?
+if(
+  cellStats(polynomialTrendSurface$raster,'max') >
+  cellStats(Ogallala:::meters_to_feet(surface_elevation-base_elevation), 'max')
+){
+  warning(
+    "some of our predictions are outside of the theoretical",
+    " max thickness thickness of the aquifer"
+  )
+}  
+if(cellStats(polynomialTrendSurface$raster,'max') > 1300){
+  warning(
+    "max prediction is greater than the max reported depth of the aquifer",
+    ". re-scaling using min-max normalization"
+  )
+  # re-shape our predictive interval so it is 0:1300 ft (from V McGuire)
+  polynomialTrendSurface$raster <- Ogallala:::min_max_normalize(
+    polynomialTrendSurface$raster)
+}
+# save to disk in the current working directory
+cat(" -- writing raster to local directory\n")
+writeRaster(
+    polynomialTrendSurface$raster,
+    paste(
+      "saturated_thickness_",year,"_polynomial_trend.tif", 
+      sep=""
+    ),
+    overwrite=T
+  )
 
-writeRaster(inverse_distance_w_knn, "saturated_thickness_09_knn_idw.tif")
-
-# polynomial trend
-predictor_data <- raster::stack(surface_elevation, base_elevation)
-  names(predictor_data) <- c("surf_elev","base_elev")
-polynomial_trend <- Ogallala:::polynomialTrendSurface(wellPoints,
-  predRaster=predictor_data, field="saturated_thickness_smoothed")
-    writeRaster(polynomial_trend$raster,
-                "saturated_thickness_09_polynomial_trend.tif")
-
-# do some cross-validation
-
-inverse_distance       <- raster("saturated_thickness_09_idw.tif")
-  inverse_distance <- raster::mask(inverse_distance,
-    spTransform(boundary,CRS(projection(inverse_distance))))
-inverse_distance_w_knn <- raster("saturated_thickness_09_knn_idw.tif")
-  inverse_distance_w_knn <- raster::mask(inverse_distance_w_knn,
-    spTransform(boundary,CRS(projection(inverse_distance_w_knn))))
-polynomial_trend       <- raster("saturated_thickness_09_polynomial_trend.tif")
-  polynomial_trend <- raster::mask(polynomial_trend,
-    spTransform(boundary,CRS(projection(polynomial_trend))))
-topogrid               <- projectRaster(raster("satThick.2009.vMcguire.tif"),
-                            to=inverse_distance_w_knn)
-
-# build two predictive ensembles to test, one with topogrid and one with polynomial trend
-ensemble_tp <- stackApply(raster::stack(inverse_distance_w_knn,topogrid), fun=median, indices=1)
-ensemble_tp <- raster::mask(ensemble_tp,
-  spTransform(boundary,CRS(projection(ensemble_tp))))
-ensemble_pt <- stackApply(raster::stack(inverse_distance_w_knn,polynomial_trend), fun=median, indices=1)
-ensemble_pt <- raster::mask(ensemble_pt,
-  spTransform(boundary,CRS(projection(ensemble_pt))))
-
-# K-fold validation using random well points subsampled from the
-# dataset. IDW (without neighbor weighting) will be our null model. This is
-# a know-nothing interpolation with the original saturated thickness estimate
-# calculated for each well. The other models being tested (including the ensembles)
-# contain increasingly more information. This validation testing will be slightly biased,
-# because we aren't actually re-training models for each K step (topogrid isn't easily
-# scriptable for this task). This might inflate the performance of IDW algorithms,
-# which we might expect to perform more poorly without having seen all source points when
-# interpolating. Regardless, all models will be biased the in the same way (i.e., have
-# seen the full 2009 well dataset), so it should still make for a fair comparison.
-
-k = 100
-overall <- data.frame(matrix(NA,nrow=k,ncol=6))
-  colnames(overall) <- c("topogrid","idw","idw_w_knn",
-                           "polynomial","ensemble_pt",
-                             "ensemble_tp")
-
-residuals <- data.frame(matrix(NA,nrow=nrow(wellPoints)*0.2,ncol=4))
-
-topogrid_raw_residual_error         <- vector()
-polynomial_trend_raw_residual_error <- vector()
-idw_w_knn_raw_residual_error        <- vector()
-
-cat(" -- resampling and validating (pseudo-k-folds validation): ")
-for(i in 1:k){
-  run <- splitToTrainingTestingDatasets(wellPoints)
-  tg <-
-    raster::extract(topogrid,
-      spTransform(run$testing,CRS(projection(topogrid))))
-  idw <-
-    raster::extract(inverse_distance,
-      spTransform(run$testing,CRS(projection(inverse_distance))))
-  idw_w_knn <-
-    raster::extract(inverse_distance_w_knn,
-      spTransform(run$testing,CRS(projection(inverse_distance_w_knn))))
-  pt <-
-    raster::extract(polynomial_trend,
-      spTransform(run$testing,CRS(projection(polynomial_trend))))
-  e_pt <-
-    raster::extract(ensemble_pt,
-      spTransform(run$testing,CRS(projection(ensemble_pt))))
-  e_tp <-
-    raster::extract(ensemble_tp,
-      spTransform(run$testing,CRS(projection(ensemble_tp))))
-
-  # we are going to keep a running log of our residual error with
-  # topogrid to see if we can find a directional bias
-  topogrid_raw_residual_error <-
-    append(topogrid_raw_residual_error,
-      run$testing$saturated_thickness-tg)
-
-  polynomial_trend_raw_residual_error <-
-    append(polynomial_trend_raw_residual_error,
-      run$testing$saturated_thickness-pt)
-
-  idw_w_knn_raw_residual_error <-
-    append(idw_w_knn_raw_residual_error,
-      run$testing$saturated_thickness-idw_w_knn)
-
-  residuals[,1] <- (run$testing$saturated_thickness-tg)^2
-    overall[i,1] <- mean(residuals[,1],na.rm=T)
-  residuals[,2] <- (run$testing$saturated_thickness-idw)^2
-    overall[i,2] <- mean(residuals[,2],na.rm=T)
-  residuals[,3] <- (run$testing$saturated_thickness-idw_w_knn)^2
-    overall[i,3] <- mean(residuals[,3],na.rm=T)
-  residuals[,4] <- (run$testing$saturated_thickness-pt)^2
-    overall[i,4] <- mean(residuals[,4],na.rm=T)
-  residuals[,5] <- (run$testing$saturated_thickness-e_pt)^2
-    overall[i,5] <- mean(residuals[,5],na.rm=T)
-  residuals[,6] <- (run$testing$saturated_thickness-e_tp)^2
-    overall[i,6] <- mean(residuals[,6],na.rm=T)
-
-  cat(paste("[",i,"/",k,"]",sep=""))
-};
-cat("\n")
-
-# let's merge residuals from our last testing dataset into
-# a shapefile for mapping
-colnames(residuals) <- c("topogrid","idw","idw_w_knn",
-                         "polynomial","ensemble_pt",
-                           "ensemble_tp")
-
-run$testing@data <- cbind(run$testing@data,residuals)
-  rgdal::writeOGR(run$testing,".", "well_pts_testing_validation",
-                  overwrite=T, driver="ESRI Shapefile")
-#
-# report the winning prediction
-#
-winner <- names(which(round(colMeans(overall)) == min(round(colMeans(overall)))))
-cat(" -- the winning algorithm is:", winner,"\n")
-print(round(sqrt(colMeans(overall))))
-
-#
-# Now Make Our Plots
-#
-
-#
-# Plot 1 : Regional Predictive Ambiguity in Models vs. IDW Ensembles
-#
-
-dev.new()
-par(mfrow=c(2,2), mai=c(0.1,0.55,0.25,1.25))
-plot(topogrid,main="topogrid (2009)",cex=0.6, yaxt='n', xaxt='n')
-plot(spTransform(boundary,CRS(projection(topogrid))),add=T,border="grey")
-plot(polynomial_trend,main="polynomial trend (2009)",cex=0.6, yaxt='n', xaxt='n')
-plot(spTransform(boundary,CRS(projection(polynomial_trend))),add=T,border="grey")
-plot(ensemble_tp,main="ensemble topogrid (2009)",cex=0.6, yaxt='n', xaxt='n')
-plot(spTransform(boundary,CRS(projection(ensemble_pt))),add=T,border="grey")
-plot(ensemble_pt,main="ensemble polynomial trend (2009)",cex=0.6, yaxt='n', xaxt='n')
-plot(spTransform(boundary,CRS(projection(ensemble_pt))),add=T,border="grey")
-
-#
-# Plot 2 : Residual error plots
-#
-
-dev.new()
-hist(na.omit(topogrid_raw_residual_error),main="",xlab="residual error",cex=0.8,breaks=75,ylab="")
-  grid()
-    abline(col="red",v=mean(topogrid_raw_residual_error,na.rm=T))
-dev.new()
-hist(na.omit(polynomial_trend_raw_residual_error),main="",xlab="residual error",cex=0.8,breaks=75,ylab="")
-  grid()
-    abline(col="red",v=mean(polynomial_trend_raw_residual_error,na.rm=T))

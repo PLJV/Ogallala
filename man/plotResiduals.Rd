@@ -4,7 +4,7 @@
 \alias{plotResiduals}
 \title{plot the z-standardized residual error for a model run}
 \usage{
-plotResiduals(pts)
+plotResiduals(pts, field = "residls")
 }
 \description{
 plot the z-standardized residual error for a model run
